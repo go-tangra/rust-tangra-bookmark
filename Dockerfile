@@ -1,7 +1,14 @@
 # ---- Builder ----
-FROM rust:1.84-alpine AS builder
+FROM rust:1-alpine AS builder
 
-RUN apk add --no-cache musl-dev protobuf-dev protoc
+RUN apk add --no-cache musl-dev curl unzip && \
+    curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v28.3/protoc-28.3-linux-x86_64.zip && \
+    unzip protoc-28.3-linux-x86_64.zip -d /usr/local && \
+    rm protoc-28.3-linux-x86_64.zip && \
+    protoc --version
+
+ENV PROTOC=/usr/local/bin/protoc
+ENV PROTOC_INCLUDE=/usr/local/include
 
 WORKDIR /build
 

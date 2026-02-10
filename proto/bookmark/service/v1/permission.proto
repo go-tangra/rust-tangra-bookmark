@@ -2,28 +2,55 @@ syntax = "proto3";
 
 package bookmark.service.v1;
 
+import "google/api/annotations.proto";
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
 
 // BookmarkPermissionService — Zanzibar-like authorization for bookmarks.
 service BookmarkPermissionService {
   // Grant access to a resource.
-  rpc GrantAccess(GrantAccessRequest) returns (GrantAccessResponse);
+  rpc GrantAccess(GrantAccessRequest) returns (GrantAccessResponse) {
+    option (google.api.http) = {
+      post: "/v1/permissions"
+      body: "*"
+    };
+  }
 
   // Revoke access from a resource.
-  rpc RevokeAccess(RevokeAccessRequest) returns (google.protobuf.Empty);
+  rpc RevokeAccess(RevokeAccessRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      delete: "/v1/permissions"
+    };
+  }
 
   // List permissions on a resource.
-  rpc ListPermissions(ListPermissionsRequest) returns (ListPermissionsResponse);
+  rpc ListPermissions(ListPermissionsRequest) returns (ListPermissionsResponse) {
+    option (google.api.http) = {
+      get: "/v1/permissions"
+    };
+  }
 
   // Check if a subject has access to a resource.
-  rpc CheckAccess(CheckAccessRequest) returns (CheckAccessResponse);
+  rpc CheckAccess(CheckAccessRequest) returns (CheckAccessResponse) {
+    option (google.api.http) = {
+      post: "/v1/permissions/check"
+      body: "*"
+    };
+  }
 
   // List resources accessible by a subject.
-  rpc ListAccessibleResources(ListAccessibleResourcesRequest) returns (ListAccessibleResourcesResponse);
+  rpc ListAccessibleResources(ListAccessibleResourcesRequest) returns (ListAccessibleResourcesResponse) {
+    option (google.api.http) = {
+      get: "/v1/permissions/accessible"
+    };
+  }
 
   // Get effective permissions for a subject on a resource.
-  rpc GetEffectivePermissions(GetEffectivePermissionsRequest) returns (GetEffectivePermissionsResponse);
+  rpc GetEffectivePermissions(GetEffectivePermissionsRequest) returns (GetEffectivePermissionsResponse) {
+    option (google.api.http) = {
+      get: "/v1/permissions/effective"
+    };
+  }
 }
 
 // Resource type.

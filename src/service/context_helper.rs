@@ -20,7 +20,18 @@ pub fn extract_context<T>(req: &Request<T>) -> Result<RequestContext, Status> {
         .and_then(|s| s.parse::<i32>().ok())
         .unwrap_or(0);
 
-    if tenant_id == 0 {
+    let role_ids: Vec<String> = get_metadata_value(req, MD_ROLES)
+        .map(|s| {
+            s.split(',')
+                .filter(|r| !r.is_empty())
+                .map(|r| r.to_string())
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let is_platform_admin = role_ids.iter().any(|r| r == "platform:admin" || r == "super:admin");
+
+    if tenant_id == 0 && !is_platform_admin {
         return Err(Status::unauthenticated("missing or invalid tenant_id"));
     }
 
@@ -30,15 +41,6 @@ pub fn extract_context<T>(req: &Request<T>) -> Result<RequestContext, Status> {
     }
 
     let username = get_metadata_value(req, MD_USERNAME).unwrap_or_default();
-
-    let role_ids = get_metadata_value(req, MD_ROLES)
-        .map(|s| {
-            s.split(',')
-                .filter(|r| !r.is_empty())
-                .map(|r| r.to_string())
-                .collect()
-        })
-        .unwrap_or_default();
 
     Ok(RequestContext {
         tenant_id,

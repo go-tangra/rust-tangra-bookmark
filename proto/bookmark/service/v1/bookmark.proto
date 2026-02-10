@@ -2,25 +2,48 @@ syntax = "proto3";
 
 package bookmark.service.v1;
 
+import "google/api/annotations.proto";
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
 
 // BookmarkService manages URL bookmarks.
 service BookmarkService {
   // Create a new bookmark.
-  rpc CreateBookmark(CreateBookmarkRequest) returns (Bookmark);
+  rpc CreateBookmark(CreateBookmarkRequest) returns (Bookmark) {
+    option (google.api.http) = {
+      post: "/v1/bookmarks"
+      body: "*"
+    };
+  }
 
   // Get a bookmark by ID.
-  rpc GetBookmark(GetBookmarkRequest) returns (Bookmark);
+  rpc GetBookmark(GetBookmarkRequest) returns (Bookmark) {
+    option (google.api.http) = {
+      get: "/v1/bookmarks/{id}"
+    };
+  }
 
   // List bookmarks for the current tenant.
-  rpc ListBookmarks(ListBookmarksRequest) returns (ListBookmarksResponse);
+  rpc ListBookmarks(ListBookmarksRequest) returns (ListBookmarksResponse) {
+    option (google.api.http) = {
+      get: "/v1/bookmarks"
+    };
+  }
 
   // Update a bookmark.
-  rpc UpdateBookmark(UpdateBookmarkRequest) returns (Bookmark);
+  rpc UpdateBookmark(UpdateBookmarkRequest) returns (Bookmark) {
+    option (google.api.http) = {
+      put: "/v1/bookmarks/{id}"
+      body: "*"
+    };
+  }
 
   // Delete a bookmark.
-  rpc DeleteBookmark(DeleteBookmarkRequest) returns (google.protobuf.Empty);
+  rpc DeleteBookmark(DeleteBookmarkRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      delete: "/v1/bookmarks/{id}"
+    };
+  }
 }
 
 // Bookmark entity.
