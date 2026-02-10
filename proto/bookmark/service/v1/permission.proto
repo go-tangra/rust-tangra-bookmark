@@ -1,0 +1,155 @@
+syntax = "proto3";
+
+package bookmark.service.v1;
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+
+// BookmarkPermissionService — Zanzibar-like authorization for bookmarks.
+service BookmarkPermissionService {
+  // Grant access to a resource.
+  rpc GrantAccess(GrantAccessRequest) returns (GrantAccessResponse);
+
+  // Revoke access from a resource.
+  rpc RevokeAccess(RevokeAccessRequest) returns (google.protobuf.Empty);
+
+  // List permissions on a resource.
+  rpc ListPermissions(ListPermissionsRequest) returns (ListPermissionsResponse);
+
+  // Check if a subject has access to a resource.
+  rpc CheckAccess(CheckAccessRequest) returns (CheckAccessResponse);
+
+  // List resources accessible by a subject.
+  rpc ListAccessibleResources(ListAccessibleResourcesRequest) returns (ListAccessibleResourcesResponse);
+
+  // Get effective permissions for a subject on a resource.
+  rpc GetEffectivePermissions(GetEffectivePermissionsRequest) returns (GetEffectivePermissionsResponse);
+}
+
+// Resource type.
+enum ResourceType {
+  RESOURCE_TYPE_UNSPECIFIED = 0;
+  RESOURCE_TYPE_BOOKMARK = 1;
+}
+
+// Relation (permission level).
+enum Relation {
+  RELATION_UNSPECIFIED = 0;
+  RELATION_OWNER = 1;
+  RELATION_EDITOR = 2;
+  RELATION_VIEWER = 3;
+  RELATION_SHARER = 4;
+}
+
+// Subject type.
+enum SubjectType {
+  SUBJECT_TYPE_UNSPECIFIED = 0;
+  SUBJECT_TYPE_USER = 1;
+  SUBJECT_TYPE_ROLE = 2;
+  SUBJECT_TYPE_TENANT = 3;
+}
+
+// Permission (action that can be checked).
+enum Permission {
+  PERMISSION_UNSPECIFIED = 0;
+  PERMISSION_READ = 1;
+  PERMISSION_WRITE = 2;
+  PERMISSION_DELETE = 3;
+  PERMISSION_SHARE = 4;
+}
+
+// Permission tuple entity.
+message PermissionTuple {
+  uint32 id = 1;
+  uint32 tenant_id = 2;
+  ResourceType resource_type = 3;
+  string resource_id = 4;
+  Relation relation = 5;
+  SubjectType subject_type = 6;
+  string subject_id = 7;
+  optional uint32 granted_by = 8;
+  optional google.protobuf.Timestamp expires_at = 9;
+  google.protobuf.Timestamp create_time = 10;
+}
+
+// Request to grant access.
+message GrantAccessRequest {
+  ResourceType resource_type = 1;
+  string resource_id = 2;
+  Relation relation = 3;
+  SubjectType subject_type = 4;
+  string subject_id = 5;
+  optional google.protobuf.Timestamp expires_at = 6;
+}
+
+// Response after granting access.
+message GrantAccessResponse {
+  PermissionTuple permission = 1;
+}
+
+// Request to revoke access.
+message RevokeAccessRequest {
+  ResourceType resource_type = 1;
+  string resource_id = 2;
+  optional Relation relation = 3;
+  SubjectType subject_type = 4;
+  string subject_id = 5;
+}
+
+// Request to list permissions.
+message ListPermissionsRequest {
+  optional ResourceType resource_type = 1;
+  optional string resource_id = 2;
+  optional SubjectType subject_type = 3;
+  optional string subject_id = 4;
+  optional uint32 page = 5;
+  optional uint32 page_size = 6;
+}
+
+// Response for listing permissions.
+message ListPermissionsResponse {
+  repeated PermissionTuple permissions = 1;
+  uint32 total = 2;
+}
+
+// Request to check access.
+message CheckAccessRequest {
+  string user_id = 1;
+  ResourceType resource_type = 2;
+  string resource_id = 3;
+  Permission permission = 4;
+}
+
+// Response for access check.
+message CheckAccessResponse {
+  bool allowed = 1;
+  optional string reason = 2;
+}
+
+// Request to list accessible resources.
+message ListAccessibleResourcesRequest {
+  string user_id = 1;
+  ResourceType resource_type = 2;
+  Permission permission = 3;
+  optional uint32 page = 4;
+  optional uint32 page_size = 5;
+}
+
+// Response for accessible resources.
+message ListAccessibleResourcesResponse {
+  repeated string resource_ids = 1;
+  uint32 total = 2;
+}
+
+// Request to get effective permissions.
+message GetEffectivePermissionsRequest {
+  string user_id = 1;
+  ResourceType resource_type = 2;
+  string resource_id = 3;
+}
+
+// Response for effective permissions.
+message GetEffectivePermissionsResponse {
+  repeated Permission permissions = 1;
+  Relation highest_relation = 2;
+}

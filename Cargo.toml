@@ -1,0 +1,40 @@
+[package]
+name = "rust-tangra-bookmark"
+version = "1.0.0"
+edition = "2021"
+description = "Bookmark management service with gRPC, mTLS, and Zanzibar-like permissions"
+
+[[bin]]
+name = "bookmark-server"
+path = "src/main.rs"
+
+[dependencies]
+# gRPC
+tonic = { version = "0.12", features = ["tls"] }
+prost = "0.13"
+prost-types = "0.13"
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# Database
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono", "migrate"] }
+
+# Serialization & config
+serde = { version = "1", features = ["derive"] }
+serde_yaml = "0.9"
+
+# IDs & time
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# Utilities
+thiserror = "2"
+anyhow = "1"
+
+[build-dependencies]
+tonic-build = "0.12"

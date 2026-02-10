@@ -1,0 +1,66 @@
+syntax = "proto3";
+
+package common.service.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// ModuleRegistrationService handles dynamic module registration.
+// Modules call this service to register themselves with the admin gateway.
+service ModuleRegistrationService {
+  rpc RegisterModule(RegisterModuleRequest) returns (RegisterModuleResponse);
+  rpc UnregisterModule(UnregisterModuleRequest) returns (UnregisterModuleResponse);
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+}
+
+message RegisterModuleRequest {
+  string module_id = 1;
+  string module_name = 2;
+  string version = 3;
+  string description = 4;
+  string grpc_endpoint = 5;
+  bytes openapi_spec = 10;
+  bytes proto_descriptor = 11;
+  bytes menus_yaml = 12;
+  string auth_token = 20;
+}
+
+message RegisterModuleResponse {
+  string registration_id = 1;
+  ModuleStatus status = 2;
+  string message = 3;
+}
+
+message UnregisterModuleRequest {
+  string module_id = 1;
+  string auth_token = 2;
+}
+
+message UnregisterModuleResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message HeartbeatRequest {
+  string module_id = 1;
+  ModuleHealth health = 2;
+  string message = 3;
+}
+
+message HeartbeatResponse {
+  bool acknowledged = 1;
+  google.protobuf.Timestamp next_heartbeat = 2;
+}
+
+enum ModuleStatus {
+  MODULE_STATUS_UNSPECIFIED = 0;
+  MODULE_STATUS_ACTIVE = 1;
+  MODULE_STATUS_INACTIVE = 2;
+  MODULE_STATUS_ERROR = 3;
+}
+
+enum ModuleHealth {
+  MODULE_HEALTH_UNSPECIFIED = 0;
+  MODULE_HEALTH_HEALTHY = 1;
+  MODULE_HEALTH_DEGRADED = 2;
+  MODULE_HEALTH_UNHEALTHY = 3;
+}

@@ -1,0 +1,79 @@
+# Bookmark Module Menu Definitions
+# This file defines the menu structure for the Bookmark module
+# Used by admin service for dynamic menu registration
+
+module:
+  id: bookmark
+  name: Bookmark
+  description: URL Bookmark Management
+
+menus:
+  - id: bookmark
+    parent_id: null
+    type: CATALOG
+    name: Bookmarks
+    path: /bookmark
+    icon: lucide:bookmark
+    order: 460
+    authority:
+      - platform:admin
+      - tenant:manager
+
+  - id: bookmark-list
+    parent_id: bookmark
+    type: MENU
+    name: All Bookmarks
+    path: list
+    component: app/bookmark/list/index.vue
+    icon: lucide:list
+    order: 1
+    authority:
+      - platform:admin
+      - tenant:manager
+
+  - id: bookmark-permissions
+    parent_id: bookmark
+    type: MENU
+    name: Permissions
+    path: permission
+    component: app/bookmark/permission/index.vue
+    icon: lucide:shield
+    order: 2
+    authority:
+      - platform:admin
+      - tenant:manager
+
+permission_groups:
+  - name: Bookmark
+    module: bookmark
+    description: Bookmark Management Permissions
+    permissions:
+      - name: View Bookmarks
+        code: bookmark.bookmark.view
+      - name: Create Bookmarks
+        code: bookmark.bookmark.create
+      - name: Update Bookmarks
+        code: bookmark.bookmark.update
+      - name: Delete Bookmarks
+        code: bookmark.bookmark.delete
+      - name: Manage Permissions
+        code: bookmark.permission.manage
+
+roles:
+  - name: Bookmark Administrator
+    code: bookmark.admin
+    description: Full access to Bookmark module
+    is_system: true
+    permissions:
+      - bookmark.bookmark.view
+      - bookmark.bookmark.create
+      - bookmark.bookmark.update
+      - bookmark.bookmark.delete
+      - bookmark.permission.manage
+
+  - name: Bookmark Viewer
+    code: bookmark.viewer
+    description: Read-only access to Bookmark module
+    is_system: true
+    permissions:
+      - bookmark.bookmark.view
