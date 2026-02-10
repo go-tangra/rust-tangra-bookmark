@@ -1,0 +1,78 @@
+syntax = "proto3";
+
+package bookmark.service.v1;
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+
+// BookmarkService manages URL bookmarks.
+service BookmarkService {
+  // Create a new bookmark.
+  rpc CreateBookmark(CreateBookmarkRequest) returns (Bookmark);
+
+  // Get a bookmark by ID.
+  rpc GetBookmark(GetBookmarkRequest) returns (Bookmark);
+
+  // List bookmarks for the current tenant.
+  rpc ListBookmarks(ListBookmarksRequest) returns (ListBookmarksResponse);
+
+  // Update a bookmark.
+  rpc UpdateBookmark(UpdateBookmarkRequest) returns (Bookmark);
+
+  // Delete a bookmark.
+  rpc DeleteBookmark(DeleteBookmarkRequest) returns (google.protobuf.Empty);
+}
+
+// Bookmark entity.
+message Bookmark {
+  string id = 1;
+  uint32 tenant_id = 2;
+  string url = 3;
+  string title = 4;
+  string description = 5;
+  repeated string tags = 6;
+  optional uint32 created_by = 7;
+  google.protobuf.Timestamp create_time = 8;
+  google.protobuf.Timestamp update_time = 9;
+}
+
+// Request to create a bookmark.
+message CreateBookmarkRequest {
+  string url = 1;
+  string title = 2;
+  string description = 3;
+  repeated string tags = 4;
+}
+
+// Request to get a bookmark by ID.
+message GetBookmarkRequest {
+  string id = 1;
+}
+
+// Request to list bookmarks.
+message ListBookmarksRequest {
+  optional uint32 page = 1;
+  optional uint32 page_size = 2;
+  optional string tag_filter = 3;
+}
+
+// Response for listing bookmarks.
+message ListBookmarksResponse {
+  repeated Bookmark bookmarks = 1;
+  uint32 total = 2;
+}
+
+// Request to update a bookmark.
+message UpdateBookmarkRequest {
+  string id = 1;
+  optional string url = 2;
+  optional string title = 3;
+  optional string description = 4;
+  repeated string tags = 5;
+  bool update_tags = 6;
+}
+
+// Request to delete a bookmark.
+message DeleteBookmarkRequest {
+  string id = 1;
+}

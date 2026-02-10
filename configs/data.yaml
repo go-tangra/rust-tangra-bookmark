@@ -1,0 +1,10 @@
+data:
+  database:
+    driver: "postgresql"
+    source: "postgres://postgres:admin123@localhost:5432/bookmark?sslmode=disable"
+    max_connections: 20
+
+  redis:
+    addr: "localhost:6379"
+    password: ""
+    db: 0

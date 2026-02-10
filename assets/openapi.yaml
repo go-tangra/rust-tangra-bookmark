@@ -1,0 +1,200 @@
+openapi: 3.0.3
+info:
+  title: Bookmark Service API
+  description: URL Bookmark Management with Zanzibar-like permissions
+  version: 1.0.0
+
+paths:
+  /v1/bookmarks:
+    post:
+      summary: Create a bookmark
+      operationId: CreateBookmark
+      tags: [Bookmarks]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBookmarkRequest'
+      responses:
+        '200':
+          description: Bookmark created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bookmark'
+    get:
+      summary: List bookmarks
+      operationId: ListBookmarks
+      tags: [Bookmarks]
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer }
+        - name: pageSize
+          in: query
+          schema: { type: integer }
+        - name: tagFilter
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: List of bookmarks
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListBookmarksResponse'
+
+  /v1/bookmarks/{id}:
+    get:
+      summary: Get a bookmark
+      operationId: GetBookmark
+      tags: [Bookmarks]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Bookmark details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bookmark'
+    put:
+      summary: Update a bookmark
+      operationId: UpdateBookmark
+      tags: [Bookmarks]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateBookmarkRequest'
+      responses:
+        '200':
+          description: Bookmark updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bookmark'
+    delete:
+      summary: Delete a bookmark
+      operationId: DeleteBookmark
+      tags: [Bookmarks]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Bookmark deleted
+
+  /v1/permissions:
+    post:
+      summary: Grant access
+      operationId: GrantAccess
+      tags: [Permissions]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GrantAccessRequest'
+      responses:
+        '200':
+          description: Access granted
+    get:
+      summary: List permissions
+      operationId: ListPermissions
+      tags: [Permissions]
+      responses:
+        '200':
+          description: List of permissions
+
+  /v1/permissions/check:
+    post:
+      summary: Check access
+      operationId: CheckAccess
+      tags: [Permissions]
+      responses:
+        '200':
+          description: Access check result
+
+  /v1/permissions/accessible:
+    get:
+      summary: List accessible resources
+      operationId: ListAccessibleResources
+      tags: [Permissions]
+      responses:
+        '200':
+          description: Accessible resources
+
+  /v1/permissions/effective:
+    get:
+      summary: Get effective permissions
+      operationId: GetEffectivePermissions
+      tags: [Permissions]
+      responses:
+        '200':
+          description: Effective permissions
+
+components:
+  schemas:
+    Bookmark:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        tenantId: { type: integer }
+        url: { type: string }
+        title: { type: string }
+        description: { type: string }
+        tags: { type: array, items: { type: string } }
+        createdBy: { type: integer }
+        createTime: { type: string, format: date-time }
+        updateTime: { type: string, format: date-time }
+
+    CreateBookmarkRequest:
+      type: object
+      required: [url]
+      properties:
+        url: { type: string }
+        title: { type: string }
+        description: { type: string }
+        tags: { type: array, items: { type: string } }
+
+    UpdateBookmarkRequest:
+      type: object
+      properties:
+        url: { type: string }
+        title: { type: string }
+        description: { type: string }
+        tags: { type: array, items: { type: string } }
+        updateTags: { type: boolean }
+
+    ListBookmarksResponse:
+      type: object
+      properties:
+        bookmarks:
+          type: array
+          items:
+            $ref: '#/components/schemas/Bookmark'
+        total: { type: integer }
+
+    GrantAccessRequest:
+      type: object
+      required: [resourceType, resourceId, relation, subjectType, subjectId]
+      properties:
+        resourceType: { type: string, enum: [BOOKMARK] }
+        resourceId: { type: string }
+        relation: { type: string, enum: [OWNER, EDITOR, VIEWER, SHARER] }
+        subjectType: { type: string, enum: [USER, ROLE, TENANT] }
+        subjectId: { type: string }
+        expiresAt: { type: string, format: date-time }
