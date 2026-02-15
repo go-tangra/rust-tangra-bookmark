@@ -11,6 +11,8 @@ on:
     branches:
       - main
       - master
+  schedule:
+    - cron: '0 0 * * 0'
 
 env:
   REGISTRY: ghcr.io
@@ -97,3 +99,26 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  cleanup-ghcr:
+    name: Cleanup Old GHCR Images
+    runs-on: ubuntu-latest
+    needs: docker-build
+    if: always() && (github.event_name == 'schedule' || (github.event_name == 'push' && needs.docker-build.result == 'success'))
+    permissions:
+      packages: write
+    steps:
+      - name: Delete untagged versions
+        uses: actions/delete-package-versions@v5
+        with:
+          package-name: ${{ github.event.repository.name }}
+          package-type: container
+          delete-only-untagged-versions: true
+          min-versions-to-keep: 0
+
+      - name: Keep only latest 10 tagged versions
+        uses: actions/delete-package-versions@v5
+        with:
+          package-name: ${{ github.event.repository.name }}
+          package-type: container
+          min-versions-to-keep: 10
