@@ -1,0 +1,53 @@
+syntax = "proto3";
+
+package bookmark.service.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+
+enum RestoreMode {
+  RESTORE_MODE_SKIP = 0;
+  RESTORE_MODE_OVERWRITE = 1;
+}
+
+message ExportBackupRequest {
+  optional uint32 tenant_id = 1;
+}
+
+message ExportBackupResponse {
+  bytes data = 1;
+  string module = 2;
+  string version = 3;
+  google.protobuf.Timestamp exported_at = 4;
+  uint32 tenant_id = 5;
+  map<string, int64> entity_counts = 6;
+}
+
+message ImportBackupRequest {
+  bytes data = 1;
+  RestoreMode mode = 2;
+}
+
+message ImportBackupResponse {
+  bool success = 1;
+  repeated EntityImportResult results = 2;
+  repeated string warnings = 3;
+}
+
+message EntityImportResult {
+  string entity_type = 1;
+  int64 total = 2;
+  int64 created = 3;
+  int64 updated = 4;
+  int64 skipped = 5;
+  int64 failed = 6;
+}
+
+service BackupService {
+  rpc ExportBackup(ExportBackupRequest) returns (ExportBackupResponse) {
+    option (google.api.http) = { get: "/v1/backup/export" };
+  }
+  rpc ImportBackup(ImportBackupRequest) returns (ImportBackupResponse) {
+    option (google.api.http) = { post: "/v1/backup/import" body: "*" };
+  }
+}

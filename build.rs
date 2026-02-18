@@ -15,6 +15,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let bookmark_protos = &[
         "proto/bookmark/service/v1/bookmark.proto",
         "proto/bookmark/service/v1/permission.proto",
+        "proto/bookmark/service/v1/backup.proto",
     ];
 
     let registration_proto = "proto/common/service/v1/module_registration.proto";
