@@ -20,6 +20,7 @@ use crate::authz::engine::Engine;
 use crate::config::{DataConfig, LoggerConfig, ServerConfig};
 use crate::data::bookmark_repo::BookmarkRepo;
 use crate::data::permission_repo::PermissionRepo;
+use crate::service::bookmark_service::proto::backup_service_server::BackupServiceServer;
 use crate::service::bookmark_service::proto::bookmark_permission_service_server::BookmarkPermissionServiceServer;
 use crate::service::bookmark_service::proto::bookmark_service_server::BookmarkServiceServer;
 
@@ -58,6 +59,7 @@ async fn main() -> anyhow::Result<()> {
     );
     let permission_svc =
         service::permission_service::PermissionServiceImpl::new(checker.clone());
+    let backup_svc = service::backup_service::BackupServiceImpl::new(pool.clone());
 
     // 6. Build tonic server
     let addr: SocketAddr = server_cfg.server.grpc.addr.parse()?;
@@ -80,7 +82,8 @@ async fn main() -> anyhow::Result<()> {
         .add_service(BookmarkPermissionServiceServer::with_interceptor(
             permission_svc,
             middleware::audit::audit_interceptor,
-        ));
+        ))
+        .add_service(BackupServiceServer::new(backup_svc));
 
     // 7. Start registration background task
     let (shutdown_tx, shutdown_rx) = watch::channel(false);
