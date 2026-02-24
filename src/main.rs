@@ -4,6 +4,7 @@ mod authz;
 mod cert;
 mod config;
 mod data;
+mod frontend;
 mod middleware;
 mod registration;
 mod service;
@@ -61,12 +62,34 @@ async fn main() -> anyhow::Result<()> {
         service::permission_service::PermissionServiceImpl::new(checker.clone());
     let backup_svc = service::backup_service::BackupServiceImpl::new(pool.clone());
 
-    // 6. Build tonic server
+    // 6. Start frontend HTTP server (serves Module Federation assets)
+    let frontend_dist = std::env::var("FRONTEND_DIST_PATH")
+        .unwrap_or_else(|_| "/app/frontend-dist".to_string());
+    if std::path::Path::new(&frontend_dist).exists() {
+        let frontend_addr: SocketAddr = server_cfg
+            .server
+            .http
+            .as_ref()
+            .map(|h| h.addr.as_str())
+            .unwrap_or("0.0.0.0:9701")
+            .parse()?;
+        let dist_path = frontend_dist.clone();
+        tokio::spawn(async move {
+            if let Err(e) = frontend::start_frontend_server(frontend_addr, &dist_path).await {
+                tracing::error!(error = %e, "Frontend server failed");
+            }
+        });
+        tracing::info!(path = %frontend_dist, "Frontend serving static files");
+    } else {
+        tracing::info!(path = %frontend_dist, "No frontend dist directory found, skipping frontend server");
+    }
+
+    // 7. Build tonic server
     let addr: SocketAddr = server_cfg.server.grpc.addr.parse()?;
 
     let mut server = Server::builder();
 
-    // Apply mTLS if available
+    // 8. Apply mTLS if available
     if let Some(tls) = tls_config {
         server = server.tls_config(tls)?;
         tracing::info!("gRPC server configured with mTLS");
@@ -85,11 +108,11 @@ async fn main() -> anyhow::Result<()> {
         ))
         .add_service(BackupServiceServer::new(backup_svc));
 
-    // 7. Start registration background task
+    // 9. Start registration background task
     let (shutdown_tx, shutdown_rx) = watch::channel(false);
     let reg_handle = registration::start_registration(shutdown_rx);
 
-    // 8. Serve
+    // 10. Serve
     tracing::info!(addr = %addr, "gRPC server listening");
 
     let graceful = router.serve_with_shutdown(addr, async {
@@ -99,7 +122,7 @@ async fn main() -> anyhow::Result<()> {
 
     graceful.await?;
 
-    // 9. Graceful shutdown: unregister, drain connections
+    // 11. Graceful shutdown: unregister, drain connections
     let _ = shutdown_tx.send(true);
     let _ = reg_handle.await;
 

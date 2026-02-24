@@ -9,6 +9,13 @@ pub struct ServerConfig {
 #[derive(Debug, Deserialize)]
 pub struct ServerSection {
     pub grpc: GrpcConfig,
+    #[serde(default)]
+    pub http: Option<HttpConfig>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct HttpConfig {
+    pub addr: String,
 }
 
 #[derive(Debug, Deserialize)]

@@ -7,5 +7,10 @@ Cargo.lock
 .DS_Store
 /certs/
 
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.__mf__temp/
+
 # Claude Code
 CLAUDE.md

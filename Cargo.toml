@@ -33,6 +33,10 @@ chrono = { version = "0.4", features = ["serde"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 
+# HTTP server for serving frontend assets
+axum = "0.8"
+tower-http = { version = "0.6", features = ["fs", "cors"] }
+
 # Utilities
 thiserror = "2"
 anyhow = "1"
