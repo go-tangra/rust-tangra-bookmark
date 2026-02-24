@@ -94,12 +94,19 @@ async fn register(
     )
     .unwrap_or_default();
 
+    let frontend_entry_url =
+        std::env::var("FRONTEND_ENTRY_URL").unwrap_or_default();
+    let http_endpoint =
+        std::env::var("HTTP_ADVERTISE_ADDR").unwrap_or_default();
+
     let req = RegisterModuleRequest {
         module_id: MODULE_ID.to_string(),
         module_name: MODULE_NAME.to_string(),
         version: VERSION.to_string(),
         description: DESCRIPTION.to_string(),
         grpc_endpoint,
+        frontend_entry_url,
+        http_endpoint,
         openapi_spec,
         proto_descriptor,
         menus_yaml,

@@ -1,0 +1,58 @@
+{
+  "menu": {
+    "bookmark": "Bookmarks",
+    "list": "All Bookmarks",
+    "permissions": "Permissions"
+  },
+  "page": {
+    "bookmark": {
+      "title": "Bookmarks",
+      "url": "URL",
+      "name": "Title",
+      "description": "Description",
+      "tags": "Tags",
+      "createdBy": "Created By",
+      "createdAt": "Created At",
+      "updatedAt": "Updated At",
+      "create": "Create Bookmark",
+      "edit": "Edit Bookmark",
+      "view": "View Bookmark",
+      "delete": "Delete Bookmark",
+      "confirmDelete": "Are you sure you want to delete this bookmark?",
+      "createSuccess": "Bookmark created successfully",
+      "updateSuccess": "Bookmark updated successfully",
+      "deleteSuccess": "Bookmark deleted successfully",
+      "urlPlaceholder": "Enter bookmark URL",
+      "namePlaceholder": "Enter bookmark title",
+      "descriptionPlaceholder": "Enter bookmark description",
+      "tagsPlaceholder": "Type and press Enter to add tags",
+      "tagFilter": "Filter by Tag"
+    },
+    "permission": {
+      "title": "Permissions",
+      "grant": "Grant Permission",
+      "grantAccess": "Grant Access",
+      "revokeAccess": "Revoke Access",
+      "user": "User",
+      "role": "Role",
+      "tenant": "Tenant",
+      "subjectType": "Subject Type",
+      "subjectId": "Subject ID",
+      "subject": "Subject",
+      "relation": "Permission Level",
+      "resourceType": "Resource Type",
+      "resourceId": "Resource ID",
+      "expiresAt": "Expires At",
+      "grantedBy": "Granted By",
+      "noExpiry": "No Expiry",
+      "owner": "Owner",
+      "editor": "Editor",
+      "viewer": "Viewer",
+      "sharer": "Sharer",
+      "bookmark": "Bookmark",
+      "grantSuccess": "Access granted successfully",
+      "revokeSuccess": "Access revoked successfully",
+      "revokeConfirm": "Are you sure you want to revoke this access?"
+    }
+  }
+}

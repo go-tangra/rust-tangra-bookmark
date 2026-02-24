@@ -1,5 +1,14 @@
-# ---- Builder ----
-FROM rust:1-alpine AS builder
+# ---- Stage 1: Build frontend module ----
+FROM node:20-alpine AS frontend-builder
+RUN npm install -g pnpm@9
+WORKDIR /frontend
+COPY frontend/package.json frontend/pnpm-lock.yaml* ./
+RUN pnpm install --frozen-lockfile || pnpm install
+COPY frontend/ .
+RUN pnpm build
+
+# ---- Stage 2: Build Rust ----
+FROM rust:1-alpine AS rust-builder
 
 RUN apk add --no-cache musl-dev curl unzip && \
     curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v28.3/protoc-28.3-linux-x86_64.zip && \
@@ -23,18 +32,19 @@ RUN mkdir src && echo "fn main() {}" > src/main.rs && \
 COPY . .
 RUN cargo build --release
 
-# ---- Runtime ----
+# ---- Stage 3: Runtime ----
 FROM alpine:3.20
 
 RUN apk add --no-cache ca-certificates
 
 WORKDIR /app
 
-COPY --from=builder /build/target/release/bookmark-server /app/bookmark-server
-COPY --from=builder /build/configs /app/configs
-COPY --from=builder /build/assets /app/assets
-COPY --from=builder /build/migrations /app/migrations
+COPY --from=rust-builder /build/target/release/bookmark-server /app/bookmark-server
+COPY --from=rust-builder /build/configs /app/configs
+COPY --from=rust-builder /build/assets /app/assets
+COPY --from=rust-builder /build/migrations /app/migrations
+COPY --from=frontend-builder /frontend/dist /app/frontend-dist
 
-EXPOSE 9700
+EXPOSE 9700 9701
 
 ENTRYPOINT ["/app/bookmark-server"]

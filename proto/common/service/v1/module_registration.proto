@@ -18,6 +18,8 @@ message RegisterModuleRequest {
   string version = 3;
   string description = 4;
   string grpc_endpoint = 5;
+  string frontend_entry_url = 6;
+  string http_endpoint = 7;
   bytes openapi_spec = 10;
   bytes proto_descriptor = 11;
   bytes menus_yaml = 12;
