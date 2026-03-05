@@ -29,9 +29,10 @@ pub fn extract_context<T>(req: &Request<T>) -> Result<RequestContext, Status> {
         })
         .unwrap_or_default();
 
-    let is_platform_admin = role_ids.iter().any(|r| r == "platform:admin" || r == "super:admin");
-
-    if tenant_id == 0 && !is_platform_admin {
+    // tenant_id == 0 is the platform tenant; users assigned to it (platform admins,
+    // module admins, etc.) are legitimate.  Only reject when there's genuinely no
+    // tenant context AND no roles at all — which indicates a missing/broken JWT.
+    if tenant_id == 0 && role_ids.is_empty() {
         return Err(Status::unauthenticated("missing or invalid tenant_id"));
     }
 
