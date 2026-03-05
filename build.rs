@@ -16,11 +16,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "proto/bookmark/service/v1/bookmark.proto",
         "proto/bookmark/service/v1/permission.proto",
         "proto/bookmark/service/v1/backup.proto",
+        "proto/bookmark/service/v1/user.proto",
     ];
 
     let registration_proto = "proto/common/service/v1/module_registration.proto";
+    let admin_stub_proto = "proto/admin/service/v1/admin_stub.proto";
 
-    // Compile bookmark service protos
+    // Compile bookmark service protos (server only)
     tonic_build::configure()
         .build_server(true)
         .build_client(false)
@@ -29,11 +31,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .compile_protos(bookmark_protos, &include_dirs)?;
 
-    // Compile module registration proto (client only — we call LCM, not serve it)
+    // Compile module registration proto (client only — we call admin-service, not serve it)
     tonic_build::configure()
         .build_server(false)
         .build_client(true)
         .compile_protos(&[registration_proto], &include_dirs)?;
+
+    // Compile admin stub proto (client only — we call admin-service UserService/RoleService)
+    tonic_build::configure()
+        .build_server(false)
+        .build_client(true)
+        .compile_protos(&[admin_stub_proto], &include_dirs)?;
 
     Ok(())
 }

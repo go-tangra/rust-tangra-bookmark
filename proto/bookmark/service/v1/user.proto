@@ -1,0 +1,56 @@
+syntax = "proto3";
+
+package bookmark.service.v1;
+
+import "google/api/annotations.proto";
+
+// Lightweight user representation for bookmark module dropdowns
+message BookmarkUser {
+  uint32 id = 1 [json_name = "id"];
+  string username = 2 [json_name = "username"];
+  string realname = 3 [json_name = "realname"];
+  string email = 4 [json_name = "email"];
+  repeated string org_unit_names = 5 [json_name = "orgUnitNames"];
+  repeated string position_names = 6 [json_name = "positionNames"];
+}
+
+message ListBookmarkUsersRequest {
+  optional bool no_paging = 1 [json_name = "noPaging"];
+}
+
+message ListBookmarkUsersResponse {
+  repeated BookmarkUser items = 1 [json_name = "items"];
+  int32 total = 2 [json_name = "total"];
+}
+
+// Lightweight role representation for bookmark module dropdowns
+message BookmarkRole {
+  uint32 id = 1 [json_name = "id"];
+  string name = 2 [json_name = "name"];
+  string code = 3 [json_name = "code"];
+  string description = 4 [json_name = "description"];
+}
+
+message ListBookmarkRolesRequest {
+  optional bool no_paging = 1 [json_name = "noPaging"];
+}
+
+message ListBookmarkRolesResponse {
+  repeated BookmarkRole items = 1 [json_name = "items"];
+  int32 total = 2 [json_name = "total"];
+}
+
+// BookmarkUserService provides user and role listing for bookmark module
+service BookmarkUserService {
+  rpc ListUsers(ListBookmarkUsersRequest) returns (ListBookmarkUsersResponse) {
+    option (google.api.http) = {
+      get: "/v1/users"
+    };
+  }
+
+  rpc ListRoles(ListBookmarkRolesRequest) returns (ListBookmarkRolesResponse) {
+    option (google.api.http) = {
+      get: "/v1/roles"
+    };
+  }
+}

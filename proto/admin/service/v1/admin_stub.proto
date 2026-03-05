@@ -1,0 +1,50 @@
+// Minimal stubs for admin-service UserService and RoleService.
+// Field numbers must match the portal's actual proto definitions.
+// Package must be admin.service.v1 so gRPC method paths match.
+syntax = "proto3";
+
+package admin.service.v1;
+
+// Minimal PagingRequest matching go-crud's pagination.v1.PagingRequest.
+// Only includes the no_paging field (field 6) that we need.
+message PagingRequest {
+  optional bool no_paging = 6;
+}
+
+// Minimal User — field numbers match portal's user.service.v1.User
+message AdminUser {
+  uint32 id = 1;
+  repeated string org_unit_names = 7;
+  repeated string position_names = 11;
+  string username = 20;
+  string realname = 22;
+  string email = 24;
+}
+
+// Matches portal's user.service.v1.ListUserResponse
+message ListUserResponse {
+  repeated AdminUser items = 1;
+  int32 total = 2;
+}
+
+// Minimal Role — field numbers match portal's user.service.v1.Role
+message AdminRole {
+  uint32 id = 1;
+  string name = 2;
+  string code = 3;
+  string description = 6;
+}
+
+// Matches portal's user.service.v1.ListRoleResponse
+message ListRoleResponse {
+  repeated AdminRole items = 1;
+  uint64 total = 2;
+}
+
+service UserService {
+  rpc List(PagingRequest) returns (ListUserResponse);
+}
+
+service RoleService {
+  rpc List(PagingRequest) returns (ListRoleResponse);
+}

@@ -2,6 +2,7 @@
 
 mod authz;
 mod cert;
+mod client;
 mod config;
 mod data;
 mod frontend;
@@ -21,9 +22,11 @@ use crate::authz::engine::Engine;
 use crate::config::{DataConfig, LoggerConfig, ServerConfig};
 use crate::data::bookmark_repo::BookmarkRepo;
 use crate::data::permission_repo::PermissionRepo;
+use crate::client::admin_client::AdminClient;
 use crate::service::bookmark_service::proto::backup_service_server::BackupServiceServer;
 use crate::service::bookmark_service::proto::bookmark_permission_service_server::BookmarkPermissionServiceServer;
 use crate::service::bookmark_service::proto::bookmark_service_server::BookmarkServiceServer;
+use crate::service::bookmark_service::proto::bookmark_user_service_server::BookmarkUserServiceServer;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -62,6 +65,22 @@ async fn main() -> anyhow::Result<()> {
         service::permission_service::PermissionServiceImpl::new(checker.clone());
     let backup_svc = service::backup_service::BackupServiceImpl::new(pool.clone());
 
+    // 5b. Create admin client for user/role listing
+    let admin_endpoint =
+        std::env::var("ADMIN_GRPC_ENDPOINT").unwrap_or_else(|_| "localhost:7787".to_string());
+    let admin_client = match AdminClient::connect(&admin_endpoint).await {
+        Ok(c) => {
+            tracing::info!(endpoint = %admin_endpoint, "admin gRPC client connected");
+            Some(c)
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, endpoint = %admin_endpoint, "failed to connect admin client, user/role listing will be unavailable");
+            None
+        }
+    };
+    let user_svc = admin_client
+        .map(|c| service::user_service::UserServiceImpl::new(c));
+
     // 6. Start frontend HTTP server (serves Module Federation assets)
     let frontend_dist = std::env::var("FRONTEND_DIST_PATH")
         .unwrap_or_else(|_| "/app/frontend-dist".to_string());
@@ -97,7 +116,7 @@ async fn main() -> anyhow::Result<()> {
         tracing::warn!("running without mTLS");
     }
 
-    let router = server
+    let mut router = server
         .add_service(BookmarkServiceServer::with_interceptor(
             bookmark_svc,
             middleware::audit::audit_interceptor,
@@ -107,6 +126,13 @@ async fn main() -> anyhow::Result<()> {
             middleware::audit::audit_interceptor,
         ))
         .add_service(BackupServiceServer::new(backup_svc));
+
+    if let Some(user_svc) = user_svc {
+        router = router.add_service(BookmarkUserServiceServer::with_interceptor(
+            user_svc,
+            middleware::audit::audit_interceptor,
+        ));
+    }
 
     // 9. Start registration background task
     let (shutdown_tx, shutdown_rx) = watch::channel(false);
