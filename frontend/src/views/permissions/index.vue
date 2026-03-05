@@ -16,11 +16,14 @@ import {
 import type { ColumnsType } from 'ant-design-vue/es/table';
 
 import { useBookmarkPermissionStore } from '../../stores/permission.state';
+import { listUsers, listRoles } from '../../api/admin-api';
 
 const permissionStore = useBookmarkPermissionStore();
 
 const loading = ref(false);
 const permissions = ref<any[]>([]);
+const users = ref<any[]>([]);
+const roles = ref<any[]>([]);
 
 function subjectTypeToName(type: string | undefined) {
   switch (type) {
@@ -71,6 +74,34 @@ function formatDateTime(value: string | undefined) {
     return new Date(value).toLocaleString();
   } catch {
     return value;
+  }
+}
+
+function resolveSubjectName(subjectType: string | undefined, subjectId: string | undefined): string {
+  if (!subjectId) return '';
+
+  if (subjectType === 'SUBJECT_TYPE_USER') {
+    const user = users.value.find((u) => String(u.id) === subjectId);
+    if (user) {
+      return `${user.realname || user.username} (${user.username})`;
+    }
+  } else if (subjectType === 'SUBJECT_TYPE_ROLE') {
+    const role = roles.value.find((r) => r.code === subjectId);
+    if (role) {
+      return role.name ?? subjectId;
+    }
+  }
+
+  return subjectId;
+}
+
+async function loadSubjects() {
+  try {
+    const [usersResp, rolesResp] = await Promise.all([listUsers(), listRoles()]);
+    users.value = usersResp.items ?? [];
+    roles.value = rolesResp.items ?? [];
+  } catch (e) {
+    console.error('Failed to load subjects:', e);
   }
 }
 
@@ -138,6 +169,7 @@ const columns: ColumnsType<any> = [
     key: 'subjectId',
     width: 200,
     ellipsis: true,
+    customRender: ({ record }) => resolveSubjectName(record.subjectType, record.subjectId),
   },
   {
     title: $t('bookmark.page.permission.relation'),
@@ -163,7 +195,7 @@ const columns: ColumnsType<any> = [
 ];
 
 // Load on mount
-loadPermissions();
+Promise.all([loadPermissions(), loadSubjects()]);
 </script>
 
 <template>
