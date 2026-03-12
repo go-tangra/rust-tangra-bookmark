@@ -4,14 +4,12 @@ use tonic::transport::{Certificate, Identity, ServerTlsConfig};
 /// Attempt to load mTLS configuration from certificate files.
 /// Returns a tonic ServerTlsConfig if cert files exist, None otherwise.
 pub fn load_tls_config() -> Option<ServerTlsConfig> {
-    let prefix = std::env::var("BOOKMARK_ENV_PREFIX").unwrap_or_else(|_| "BOOKMARK".to_string());
+    let certs_dir = std::env::var("CERTS_DIR").unwrap_or_else(|_| "/app/certs".to_string());
 
-    let ca_path = std::env::var(format!("{prefix}_CA_CERT_PATH"))
-        .unwrap_or_else(|_| "/app/certs/ca/ca.crt".to_string());
-    let cert_path = std::env::var(format!("{prefix}_SERVER_CERT_PATH"))
-        .unwrap_or_else(|_| "/app/certs/server/server.crt".to_string());
-    let key_path = std::env::var(format!("{prefix}_SERVER_KEY_PATH"))
-        .unwrap_or_else(|_| "/app/certs/server/server.key".to_string());
+    // Convention-based paths: {certs_dir}/ca/ca.crt, {certs_dir}/bookmark-server/server.crt
+    let ca_path = format!("{certs_dir}/ca/ca.crt");
+    let cert_path = format!("{certs_dir}/bookmark-server/server.crt");
+    let key_path = format!("{certs_dir}/bookmark-server/server.key");
 
     if !Path::new(&ca_path).exists()
         || !Path::new(&cert_path).exists()
