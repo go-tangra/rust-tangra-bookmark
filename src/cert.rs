@@ -1,5 +1,5 @@
 use std::path::Path;
-use tonic::transport::{Certificate, Identity, ServerTlsConfig};
+use tonic::transport::{Certificate, ClientTlsConfig, Identity, ServerTlsConfig};
 
 /// Attempt to load mTLS configuration from certificate files.
 /// Returns a tonic ServerTlsConfig if cert files exist, None otherwise.
@@ -34,6 +34,60 @@ pub fn load_tls_config() -> Option<ServerTlsConfig> {
             None
         }
     }
+}
+
+/// Load mTLS client config for connecting to admin-service gRPC.
+/// Uses the admin client cert to authenticate with the admin gateway.
+pub fn load_client_tls_config() -> Option<ClientTlsConfig> {
+    let certs_dir = std::env::var("CERTS_DIR").unwrap_or_else(|_| "/app/certs".to_string());
+
+    let ca_path = format!("{certs_dir}/ca/ca.crt");
+    let cert_path = format!("{certs_dir}/admin/admin.crt");
+    let key_path = format!("{certs_dir}/admin/admin.key");
+
+    if !Path::new(&ca_path).exists()
+        || !Path::new(&cert_path).exists()
+        || !Path::new(&key_path).exists()
+    {
+        tracing::warn!(
+            ca = %ca_path,
+            cert = %cert_path,
+            key = %key_path,
+            "Client TLS certificate files not found, registration will use plaintext"
+        );
+        return None;
+    }
+
+    match build_client_tls_config(&ca_path, &cert_path, &key_path) {
+        Ok(config) => {
+            tracing::info!("mTLS client configuration loaded for admin-service");
+            Some(config)
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "failed to build client TLS config");
+            None
+        }
+    }
+}
+
+fn build_client_tls_config(
+    ca_path: &str,
+    cert_path: &str,
+    key_path: &str,
+) -> anyhow::Result<ClientTlsConfig> {
+    let ca_pem = std::fs::read(ca_path)?;
+    let cert_pem = std::fs::read(cert_path)?;
+    let key_pem = std::fs::read(key_path)?;
+
+    let ca = Certificate::from_pem(ca_pem);
+    let identity = Identity::from_pem(cert_pem, key_pem);
+
+    let tls = ClientTlsConfig::new()
+        .ca_certificate(ca)
+        .identity(identity)
+        .domain_name("admin-service");
+
+    Ok(tls)
 }
 
 fn build_tls_config(

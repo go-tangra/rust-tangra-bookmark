@@ -1,4 +1,5 @@
-use tonic::transport::Channel;
+use tonic::transport::{Channel, Endpoint};
+use crate::cert::load_client_tls_config;
 
 /// Generated admin stub types (client only).
 pub mod proto {
@@ -25,10 +26,14 @@ impl AdminClient {
     }
 
     pub async fn connect(endpoint: &str) -> Result<Self, tonic::transport::Error> {
-        let channel = Channel::from_shared(format!("http://{endpoint}"))
-            .expect("invalid endpoint")
-            .connect()
-            .await?;
+        let client_tls = load_client_tls_config();
+        let scheme = if client_tls.is_some() { "https" } else { "http" };
+        let mut ep = Endpoint::from_shared(format!("{scheme}://{endpoint}"))
+            .expect("invalid endpoint");
+        if let Some(tls) = client_tls {
+            ep = ep.tls_config(tls).expect("invalid TLS config");
+        }
+        let channel = ep.connect().await?;
         Ok(Self::new(channel))
     }
 

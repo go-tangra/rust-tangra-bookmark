@@ -1,7 +1,9 @@
 use std::time::Duration;
 
 use tokio::sync::watch;
-use tonic::transport::Channel;
+use tonic::transport::{Channel, Endpoint};
+
+use crate::cert::load_client_tls_config;
 
 /// Generated module registration client.
 pub mod proto {
@@ -63,12 +65,20 @@ pub fn start_registration(
 }
 
 async fn connect_with_retry(endpoint: &str) -> Option<Channel> {
+    let client_tls = load_client_tls_config();
+    let scheme = if client_tls.is_some() { "https" } else { "http" };
+
     for attempt in 1..=MAX_RETRIES {
-        match Channel::from_shared(format!("http://{endpoint}"))
-            .ok()?
-            .connect()
-            .await
-        {
+        let mut ep = match Endpoint::from_shared(format!("{scheme}://{endpoint}")) {
+            Ok(ep) => ep,
+            Err(_) => return None,
+        };
+
+        if let Some(ref tls) = client_tls {
+            ep = ep.tls_config(tls.clone()).ok()?;
+        }
+
+        match ep.connect().await {
             Ok(ch) => return Some(ch),
             Err(e) => {
                 tracing::warn!(attempt, error = %e, "connection attempt failed");
