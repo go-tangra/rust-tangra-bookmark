@@ -1,16 +1,14 @@
 /target
-Cargo.lock
 *.swp
 *.swo
 *~
 .env
 .DS_Store
-/certs/
 
-# Frontend
-frontend/node_modules/
-frontend/dist/
-frontend/.__mf__temp/
+# UI remote (ui/, built into ui/dist)
+ui/node_modules/
+ui/dist/
+ui/.__mf__temp/
 
 # Claude Code
 CLAUDE.md
