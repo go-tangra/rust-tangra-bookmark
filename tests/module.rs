@@ -255,6 +255,7 @@ async fn bookmark_module_end_to_end() {
     let app = b.app.clone();
     let verifier = std::sync::Arc::clone(&b.verifier);
     let digest = b.docs_digest.clone();
+    let serves_ui = b.serves_ui;
     let addr = app.http_local_addr().unwrap();
     let (tx, rx) = tokio::sync::oneshot::channel::<()>();
     let done = tokio::spawn(b.run_until(async {
@@ -949,6 +950,39 @@ async fn bookmark_module_end_to_end() {
         .await
         .unwrap();
     assert_eq!((r.status, r.body.as_str()), (403, "{\"reason\":\"denied\"}\n"));
+
+    // The UI remote, when this build embeds one (feature `ui` and a built
+    // ui/dist): the module-federation manifest of the remote `bookmark` with
+    // the manifest's exposes, and its entry.
+    let r = p
+        .call(addr, "bookmark", "GET", "/ui/mf-manifest.json", &[], "")
+        .await
+        .unwrap();
+    if serves_ui {
+        assert_eq!(r.status, 200, "{}", r.body);
+        assert_eq!(r.headers["cache-control"], "no-cache");
+        let m = r.json();
+        assert!(m["name"] == "bookmark" || m["id"] == "bookmark", "{}", r.body);
+        assert_eq!(m["metaData"]["publicPath"], "/m/bookmark/", "{}", r.body);
+        let mut got: Vec<&str> = m["exposes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|e| e["path"].as_str().unwrap())
+            .collect();
+        let mut want = manifest::EXPOSES.to_vec();
+        got.sort_unstable();
+        want.sort_unstable();
+        assert_eq!(got, want, "the remote exposes the manifest's exposes");
+        let r = p
+            .call(addr, "bookmark", "GET", "/ui/remoteEntry.js", &[], "")
+            .await
+            .unwrap();
+        assert_eq!(r.status, 200);
+    } else {
+        assert_eq!(r.status, 404);
+        eprintln!("this build serves no UI remote (feature `ui` and a built ui/dist): UI check skipped");
+    }
 
     // Nothing internal leaked into the log.
     assert!(!log.contents().contains("storage failure"), "{}", log.contents());

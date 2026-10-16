@@ -65,10 +65,10 @@ images, deploy) are marked **(release)** and are not done in this change.
 
 ## Phase 7: UI remote (next agent)
 
-- [ ] T070 `ui/` Vue 3 module-federation remote with `@go-tangra/ui` (name `bookmark`, base `/m/bookmark/`, exposes `./routes`, `./nav`, `./boot`), built from `api/openapi/bookmark.yaml` alone.
-- [ ] T071 Views: bookmark list (server-side table: sort, paging, tag chips, search), create/edit drawer, share drawer (auth directory pickers, relation, expiry), sharing page (`GET /permissions`), backup page; `boot` shows `bookmark.shared` toasts.
-- [ ] T072 Icon safelist (`ui/src/safelist.ts`) for page icons outside the kit set; styles spec test.
-- [ ] T073 Build with feature `ui` and check `/ui/mf-manifest.json` in `tests/module.rs`.
+- [x] T070 `ui/` Vue 3 module-federation remote with `@go-tangra/ui` (name `bookmark`, base `/m/bookmark/`, exposes `./routes`, `./nav`, `./boot`), built from `api/openapi/bookmark.yaml` alone.
+- [x] T071 Views: bookmark list (server-side table: sort, paging, tag chips, search), create/edit drawer, share drawer (auth directory pickers, relation, expiry), sharing page (`GET /permissions`), backup page; `boot` shows `bookmark.shared` toasts.
+- [x] T072 Icon safelist (`ui/src/safelist.ts`) for page icons outside the kit set; styles spec test.
+- [x] T073 Build with feature `ui` and check `/ui/mf-manifest.json` in `tests/module.rs`.
 
 ## Phase 8: v3 data import (next agent)
 
