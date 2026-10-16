@@ -25,6 +25,7 @@ fn embedded_help_loads() {
         "guides/backup",
         "reference",
         "operations",
+        "import-v3",
     ] {
         assert!(slugs.contains(&want), "{want} in {slugs:?}");
     }
@@ -41,7 +42,10 @@ fn embedded_help_loads() {
     assert!(
         b.pages
             .iter()
-            .any(|p| p.slug == "operations" && p.audience == Audience::Operator.as_str())
+            .filter(|p| p.audience == Audience::Operator.as_str())
+            .count()
+            == 2,
+        "operations and import-v3 are operator pages"
     );
     helpdocs::lint(&docs::help()).unwrap();
 }

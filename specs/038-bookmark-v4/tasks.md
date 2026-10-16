@@ -72,7 +72,7 @@ images, deploy) are marked **(release)** and are not done in this change.
 
 ## Phase 8: v3 data import (next agent)
 
-- [ ] T080 `bookmark-migrate` (src/bin): source config, read-only snapshot, `-dry-run`/`-apply` (one transaction), `-tenant`, user CSV `email,uuid`, roles `v3=v4`, tenant 0 → `00000000-0000-0000-0000-000000000001`, relation/subject mapping, JSON report (FR-060–FR-066). Tests against a seeded v3 schema in `testutil::pg`.
+- [x] T080 `bookmark-migrate` (src/bin): source config, read-only snapshot, `-dry-run`/`-apply` (one transaction), `-tenant`, user CSV `email,uuid`, roles `v3=v4`, tenant 0 → `00000000-0000-0000-0000-000000000001`, relation/subject mapping, JSON report (FR-060–FR-066). Tests against a seeded v3 schema in `testutil::pg`.
 
 ## Phase 9: Packaging and release (next agent)
 

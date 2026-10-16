@@ -2390,6 +2390,8 @@ dependencies = [
  "include_dir",
  "serde",
  "serde_json",
+ "serde_norway",
+ "sha2",
  "sqlx",
  "tangra-sdk",
  "tempfile",

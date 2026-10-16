@@ -23,6 +23,7 @@ pub mod config;
 pub mod docs;
 pub mod healthcheck;
 pub mod manifest;
+pub mod migrate3;
 pub mod module;
 #[cfg(feature = "ui")]
 pub mod remote;

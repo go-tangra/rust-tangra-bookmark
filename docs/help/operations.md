@@ -71,3 +71,8 @@ with enrolment).
   bookmark_app;`.
 - Imports answer `413 body_too_large`: raise `limits.max_request_bytes` and
   `limits_bookmark.backup_max_bytes`.
+
+## Import from v3
+
+The v3 bookmark service's data is carried over once with `bookmark-migrate`;
+see [Import v3 bookmarks](import-v3.md).
