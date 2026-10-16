@@ -1,0 +1,434 @@
+openapi: 3.1.0
+info:
+  title: Bookmark API
+  version: 1.0.0
+  description: >
+    Tenant-scoped web bookmarks with sharing (go-tangra v4 module `bookmark`,
+    spec 038). Gateway-proxied under /api/bookmark. Every operation declares
+    an x-freya-permission (or x-freya-public): the gateway enforces it before
+    proxying and the module derives its gateway routes from this document.
+    Fine-grained access comes from grants (owner, editor, sharer, viewer) to
+    a user, a role or the whole tenant; tenant `admin`/`owner` roles hold
+    every permission in their tenant. A bookmark the caller cannot read, of
+    another tenant, or absent answers 404 not_found; a readable one lacking
+    the needed permission 403 forbidden. Every POST/PUT needs X-CSRF-Token.
+    Users and roles for share pickers come from auth (`GET /api/v1/users`,
+    `POST /api/v1/users/lookup`, `GET /api/v1/roles`); this API stores their
+    IDs only.
+servers:
+  - url: /
+components:
+  parameters:
+    csrf:
+      name: X-CSRF-Token
+      in: header
+      required: true
+      schema: { type: string, minLength: 1, maxLength: 128 }
+    id:
+      name: id
+      in: path
+      required: true
+      description: 'bookmark ID (UUID); anything else answers 404'
+      schema: { type: string, maxLength: 64 }
+    # List contract (go-tangra specs/032-server-side-tables, contracts/http-list.md).
+    page:
+      name: page
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, maximum: 2147483647 }
+    pageSize:
+      name: page_size
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, maximum: 200, default: 25 }
+    order:
+      name: order
+      in: query
+      required: false
+      description: 'sort direction; defaults to the chosen field''s default direction'
+      schema: { type: string, enum: [asc, desc] }
+    resourceIdQuery:
+      name: resource_id
+      in: query
+      required: false
+      description: 'bookmark ID; omitted or empty = the collection (every bookmark of the tenant)'
+      schema: { type: string, maxLength: 64 }
+  responses:
+    NotFound:
+      description: 'not_found (absent, another tenant''s, or not readable by the caller)'
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Forbidden:
+      description: 'forbidden (readable, but the caller lacks the needed permission)'
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Malformed:
+      description: 'malformed_body (not JSON)'
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Invalid:
+      description: 'validation_failed: detail.fields (body) or detail.param (query)'
+      content: { application/json: { schema: { $ref: '#/components/schemas/FieldErrors' } } }
+    Unauthenticated:
+      description: 'unauthenticated (WWW-Authenticate: Bearer realm="freya")'
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+  schemas:
+    Error:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          enum: [unauthenticated, forbidden, not_found, malformed_body, validation_failed, conflict, body_too_large, method_not_allowed, internal]
+        detail: { type: object }
+    FieldErrors:
+      type: object
+      description: >
+        422 validation_failed. detail.fields maps a body field to a code:
+        required, invalid, too_long, too_many, unknown, scheme (URL not
+        http/https), past (expiry not in the future). detail.param names an
+        invalid query parameter. Values are never echoed.
+      properties:
+        reason: { type: string, enum: [validation_failed] }
+        detail:
+          type: object
+          properties:
+            fields: { type: object, additionalProperties: { type: string, enum: [required, invalid, too_long, too_many, unknown, scheme, past] } }
+            param: { type: string }
+    Info:
+      type: object
+      required: [module, version]
+      properties:
+        module: { type: string }
+        version: { type: string }
+    Permissions:
+      type: object
+      description: 'what the caller may do with the bookmark (or the collection)'
+      required: [read, write, delete, share]
+      properties:
+        read: { type: boolean }
+        write: { type: boolean }
+        delete: { type: boolean }
+        share: { type: boolean }
+    Relation:
+      type: string
+      description: 'owner: read, write, delete, share; editor: read, write; sharer: read, share; viewer: read'
+      enum: [owner, editor, sharer, viewer]
+    SubjectType:
+      type: string
+      description: 'user (subject_id = user ID), role (subject_id = role slug), tenant (everyone; subject_id empty)'
+      enum: [user, role, tenant]
+    Bookmark:
+      type: object
+      required: [id, url, title, description, tags, created_by, created_at, updated_at, permissions]
+      properties:
+        id: { type: string, format: uuid }
+        url: { type: string, format: uri, maxLength: 2048 }
+        title: { type: string, maxLength: 500 }
+        description: { type: string, maxLength: 5000 }
+        tags: { type: array, maxItems: 20, items: { type: string, minLength: 1, maxLength: 64 } }
+        created_by: { type: string, description: 'user ID of the creator (empty for imported rows without one)' }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        permissions: { $ref: '#/components/schemas/Permissions' }
+    BookmarkPage:
+      type: object
+      required: [items, total, page, page_size, sort, order]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Bookmark' } }
+        total: { type: integer }
+        page: { type: integer, description: 'the page returned (a page beyond the end answers the last page)' }
+        page_size: { type: integer }
+        sort: { type: string, enum: [created_at, updated_at, title, url] }
+        order: { type: string, enum: [asc, desc] }
+    NewBookmark:
+      type: object
+      additionalProperties: false
+      required: [url]
+      properties:
+        url: { type: string, minLength: 1, maxLength: 2048, description: 'absolute http or https URL' }
+        title: { type: string, maxLength: 500 }
+        description: { type: string, maxLength: 5000 }
+        tags: { type: array, maxItems: 20, items: { type: string, minLength: 1, maxLength: 64 }, description: 'trimmed; duplicates collapse' }
+    BookmarkPatch:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      description: 'only the fields given change; tags replaces the whole set'
+      properties:
+        url: { type: string, minLength: 1, maxLength: 2048 }
+        title: { type: string, maxLength: 500 }
+        description: { type: string, maxLength: 5000 }
+        tags: { type: array, maxItems: 20, items: { type: string, minLength: 1, maxLength: 64 } }
+    Grant:
+      type: object
+      required: [id, resource_type, resource_id, subject_type, subject_id, relation, granted_by, granted_at]
+      properties:
+        id: { type: string, format: uuid }
+        resource_type: { type: string, enum: [bookmark] }
+        resource_id: { type: string, description: 'bookmark ID; empty = every bookmark of the tenant' }
+        subject_type: { $ref: '#/components/schemas/SubjectType' }
+        subject_id: { type: string }
+        relation: { $ref: '#/components/schemas/Relation' }
+        granted_by: { type: string }
+        granted_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time, description: 'absent = no expiry; an expired grant confers nothing' }
+    GrantPage:
+      type: object
+      required: [items, total, page, page_size, sort, order]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Grant' } }
+        total: { type: integer }
+        page: { type: integer }
+        page_size: { type: integer }
+        sort: { type: string, enum: [granted_at, relation, subject_type] }
+        order: { type: string, enum: [asc, desc] }
+    NewGrant:
+      type: object
+      additionalProperties: false
+      required: [subject_type, relation]
+      description: >
+        Viewer and sharer grants need share on the bookmark; editor and owner
+        grants need every permission on it. Without resource_id the grant
+        covers every bookmark of the tenant: subject_type must be tenant and
+        the caller must be able to share the collection (tenant admin).
+      properties:
+        resource_type: { type: string, enum: [bookmark], default: bookmark }
+        resource_id: { type: string, maxLength: 64 }
+        subject_type: { $ref: '#/components/schemas/SubjectType' }
+        subject_id: { type: string, maxLength: 128, description: 'user ID (UUID) or role slug; empty for tenant' }
+        relation: { $ref: '#/components/schemas/Relation' }
+        expires_at: { type: string, format: date-time, description: 'must be in the future' }
+    RevokeRequest:
+      type: object
+      additionalProperties: false
+      required: [id]
+      properties:
+        resource_type: { type: string, enum: [bookmark], default: bookmark }
+        resource_id: { type: string, maxLength: 64, description: 'the bookmark the grant belongs to (empty: a collection grant)' }
+        id: { type: string, format: uuid }
+    Revoked:
+      type: object
+      required: [revoked]
+      properties:
+        revoked: { type: boolean }
+    CheckRequest:
+      type: object
+      additionalProperties: false
+      required: [permission]
+      properties:
+        resource_type: { type: string, enum: [bookmark], default: bookmark }
+        resource_id: { type: string, maxLength: 64 }
+        permission: { type: string, enum: [read, write, delete, share] }
+    CheckResult:
+      type: object
+      required: [allowed]
+      properties:
+        allowed: { type: boolean }
+    Effective:
+      type: object
+      required: [permissions, admin, grants]
+      properties:
+        permissions: { $ref: '#/components/schemas/Permissions' }
+        relation: { description: 'the highest relation held (null when none)', oneOf: [{ $ref: '#/components/schemas/Relation' }, { type: 'null' }] }
+        admin: { type: boolean, description: 'the caller is a tenant admin/owner (every permission)' }
+        grants: { type: array, description: 'the grants that apply to the caller', items: { $ref: '#/components/schemas/Grant' } }
+    BackupBookmark:
+      type: object
+      additionalProperties: false
+      required: [id, url]
+      properties:
+        id: { type: string, format: uuid }
+        url: { type: string, maxLength: 2048 }
+        title: { type: string, maxLength: 500 }
+        description: { type: string, maxLength: 5000 }
+        tags: { type: array, maxItems: 20, items: { type: string } }
+        created_by: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    BackupGrant:
+      type: object
+      additionalProperties: false
+      required: [id, resource_type, resource_id, subject_type, relation]
+      properties:
+        id: { type: string, format: uuid }
+        resource_type: { type: string, enum: [bookmark] }
+        resource_id: { type: string }
+        subject_type: { $ref: '#/components/schemas/SubjectType' }
+        subject_id: { type: string }
+        relation: { $ref: '#/components/schemas/Relation' }
+        granted_by: { type: string }
+        granted_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+    Backup:
+      type: object
+      additionalProperties: false
+      required: [schema_version, bookmarks, permissions]
+      properties:
+        schema_version: { type: integer, enum: [1] }
+        module: { type: string, enum: [bookmark] }
+        exported_at: { type: string, format: date-time }
+        bookmarks: { type: array, items: { $ref: '#/components/schemas/BackupBookmark' } }
+        permissions: { type: array, items: { $ref: '#/components/schemas/BackupGrant' } }
+    ImportRequest:
+      type: object
+      additionalProperties: false
+      required: [backup]
+      properties:
+        mode: { type: string, enum: [skip, overwrite], default: skip, description: 'skip keeps what exists (bookmark by ID, grant by bookmark+subject+relation); overwrite replaces it' }
+        backup: { $ref: '#/components/schemas/Backup' }
+    ImportResult:
+      type: object
+      required: [bookmarks_imported, bookmarks_skipped, permissions_imported, permissions_skipped]
+      properties:
+        bookmarks_imported: { type: integer }
+        bookmarks_skipped: { type: integer }
+        permissions_imported: { type: integer }
+        permissions_skipped: { type: integer, description: 'existing grants (skip mode) and grants of bookmarks in neither the file nor the tenant' }
+paths:
+  /api/bookmark/v1/info:
+    get:
+      operationId: getInfo
+      summary: The module name and release (no sign-in needed).
+      x-freya-public: true
+      responses:
+        '200': { description: info, content: { application/json: { schema: { $ref: '#/components/schemas/Info' } } } }
+  /api/bookmark/v1/bookmarks:
+    get:
+      operationId: listBookmarks
+      summary: One page of the bookmarks the caller can read.
+      x-freya-permission: 'bookmarks:read'
+      parameters:
+        - { $ref: '#/components/parameters/page' }
+        - { $ref: '#/components/parameters/pageSize' }
+        - { name: sort, in: query, description: 'default created_at (desc)', schema: { type: string, enum: [created_at, updated_at, title, url] } }
+        - { $ref: '#/components/parameters/order' }
+        - { name: q, in: query, description: 'case-insensitive substring of the title or URL', schema: { type: string, maxLength: 200 } }
+        - { name: tag, in: query, description: 'repeatable; every given tag must be present', style: form, explode: true, schema: { type: array, maxItems: 10, items: { type: string, maxLength: 64 } } }
+      responses:
+        '200': { description: 'page of bookmarks (newest first by default)', content: { application/json: { schema: { $ref: '#/components/schemas/BookmarkPage' } } } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '422': { $ref: '#/components/responses/Invalid' }
+    post:
+      operationId: createBookmark
+      summary: Creates a bookmark; the caller becomes its owner.
+      x-freya-permission: 'bookmarks:create'
+      parameters: [{ $ref: '#/components/parameters/csrf' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/NewBookmark' } } } }
+      responses:
+        '201': { description: created, content: { application/json: { schema: { $ref: '#/components/schemas/Bookmark' } } } }
+        '400': { $ref: '#/components/responses/Malformed' }
+        '422': { $ref: '#/components/responses/Invalid' }
+  /api/bookmark/v1/bookmarks/{id}:
+    get:
+      operationId: getBookmark
+      x-freya-permission: 'bookmarks:read'
+      parameters: [{ $ref: '#/components/parameters/id' }]
+      responses:
+        '200': { description: bookmark, content: { application/json: { schema: { $ref: '#/components/schemas/Bookmark' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      operationId: updateBookmark
+      summary: Changes the given fields (needs write on the bookmark).
+      x-freya-permission: 'bookmarks:update'
+      parameters: [{ $ref: '#/components/parameters/csrf' }, { $ref: '#/components/parameters/id' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/BookmarkPatch' } } } }
+      responses:
+        '200': { description: updated, content: { application/json: { schema: { $ref: '#/components/schemas/Bookmark' } } } }
+        '400': { $ref: '#/components/responses/Malformed' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/Invalid' }
+  /api/bookmark/v1/bookmarks/{id}/remove:
+    post:
+      operationId: removeBookmark
+      summary: Removes the bookmark and its grants (needs delete on the bookmark).
+      x-freya-permission: 'bookmarks:delete'
+      parameters: [{ $ref: '#/components/parameters/csrf' }, { $ref: '#/components/parameters/id' }]
+      responses:
+        '204': { description: removed }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/bookmark/v1/permissions:
+    get:
+      operationId: listPermissions
+      summary: >
+        The grants of one bookmark (needs share on it), or without resource_id
+        the grants of every bookmark the caller can share (tenant admins:
+        every grant of the tenant, collection grants included).
+      x-freya-permission: 'permissions:manage'
+      parameters:
+        - { name: resource_id, in: query, description: 'bookmark ID', schema: { type: string, maxLength: 64 } }
+        - { name: subject_type, in: query, schema: { $ref: '#/components/schemas/SubjectType' } }
+        - { name: subject_id, in: query, schema: { type: string, maxLength: 128 } }
+        - { $ref: '#/components/parameters/page' }
+        - { $ref: '#/components/parameters/pageSize' }
+        - { name: sort, in: query, description: 'default granted_at (desc)', schema: { type: string, enum: [granted_at, relation, subject_type] } }
+        - { $ref: '#/components/parameters/order' }
+      responses:
+        '200': { description: 'page of grants', content: { application/json: { schema: { $ref: '#/components/schemas/GrantPage' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/Invalid' }
+  /api/bookmark/v1/permissions/grant:
+    post:
+      operationId: grantAccess
+      x-freya-permission: 'permissions:manage'
+      parameters: [{ $ref: '#/components/parameters/csrf' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/NewGrant' } } } }
+      responses:
+        '201': { description: granted, content: { application/json: { schema: { $ref: '#/components/schemas/Grant' } } } }
+        '400': { $ref: '#/components/responses/Malformed' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: 'conflict (the same subject already holds this relation on the bookmark)', content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '422': { $ref: '#/components/responses/Invalid' }
+  /api/bookmark/v1/permissions/revoke:
+    post:
+      operationId: revokeAccess
+      x-freya-permission: 'permissions:manage'
+      parameters: [{ $ref: '#/components/parameters/csrf' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RevokeRequest' } } } }
+      responses:
+        '200': { description: revoked, content: { application/json: { schema: { $ref: '#/components/schemas/Revoked' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/Invalid' }
+  /api/bookmark/v1/permissions/check:
+    post:
+      operationId: checkAccess
+      summary: Whether the caller holds one permission on a bookmark (or the collection).
+      x-freya-permission: 'bookmarks:read'
+      parameters: [{ $ref: '#/components/parameters/csrf' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CheckRequest' } } } }
+      responses:
+        '200': { description: decision (false also for an unreadable or absent bookmark), content: { application/json: { schema: { $ref: '#/components/schemas/CheckResult' } } } }
+        '422': { $ref: '#/components/responses/Invalid' }
+  /api/bookmark/v1/permissions/effective:
+    get:
+      operationId: getEffectivePermissions
+      x-freya-permission: 'bookmarks:read'
+      parameters: [{ $ref: '#/components/parameters/resourceIdQuery' }]
+      responses:
+        '200': { description: effective permissions, content: { application/json: { schema: { $ref: '#/components/schemas/Effective' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/bookmark/v1/backup/export:
+    post:
+      operationId: exportBackup
+      summary: Every bookmark and grant of the caller's tenant (schema 1).
+      x-freya-permission: 'backup:manage'
+      x-freya-timeout-seconds: 120
+      parameters: [{ $ref: '#/components/parameters/csrf' }]
+      responses:
+        '200': { description: backup, content: { application/json: { schema: { $ref: '#/components/schemas/Backup' } } } }
+  /api/bookmark/v1/backup/import:
+    post:
+      operationId: importBackup
+      summary: Restores a backup into the caller's tenant (all or nothing).
+      x-freya-permission: 'backup:manage'
+      x-freya-max-body-bytes: 16777216
+      x-freya-timeout-seconds: 120
+      parameters: [{ $ref: '#/components/parameters/csrf' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ImportRequest' } } } }
+      responses:
+        '200': { description: imported, content: { application/json: { schema: { $ref: '#/components/schemas/ImportResult' } } } }
+        '400': { $ref: '#/components/responses/Malformed' }
+        '413': { description: body_too_large, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '422': { $ref: '#/components/responses/Invalid' }

@@ -1,0 +1,44 @@
+[package]
+name = "tangra-bookmark"
+description = "go-tangra v4 bookmark module: tenant-scoped web bookmarks with sharing (Rust SDK)"
+version = "4.0.0"
+edition = "2024"
+rust-version = "1.85"
+license = "MIT"
+repository = "https://github.com/go-tangra/rust-tangra-bookmark"
+publish = false
+default-run = "bookmarksvc"
+
+[[bin]]
+name = "bookmarksvc"
+path = "src/main.rs"
+
+[features]
+default = []
+# Embed and serve the built module-federation remote (ui/dist) at /ui/*
+# (the Go build tag `ui`). Without a built dist/ the binary serves no remote.
+ui = ["tangra-sdk/ui"]
+
+[dependencies]
+# Development: the SDK checkout next to this repository. Before release this
+# becomes a git rev dependency (specs/038-bookmark-v4/tasks.md T090).
+tangra-sdk = { path = "../go-tangra-sdk-rust/crates/tangra-sdk", features = ["db", "events"] }
+sqlx = { version = "0.8", default-features = false, features = ["postgres", "runtime-tokio", "macros", "migrate", "uuid", "chrono"] }
+axum = "0.8"
+tokio = { version = "1", features = ["full"] }
+http = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+uuid = { version = "1", features = ["v7", "serde"] }
+chrono = { version = "0.4", default-features = false, features = ["clock", "std", "serde"] }
+url = "2"
+include_dir = "0.7"
+thiserror = "2"
+
+[dev-dependencies]
+tangra-sdk = { path = "../go-tangra-sdk-rust/crates/tangra-sdk", features = ["db", "events", "testutil-pg"] }
+tower = { version = "0.5", features = ["util"] }
+tempfile = "3"
+
+[lints.rust]
+unsafe_code = "forbid"
