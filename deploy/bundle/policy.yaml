@@ -1,0 +1,10 @@
+# Freya service-to-service policy for bookmark (rendered for this core's
+# trust domain): deny by default; only the gateway reaches the module (API,
+# help bundle and UI remote; specs/038-bookmark-v4/contracts/mesh-policies.md).
+version: bookmark-join-1
+rules:
+  - id: gateway-forwards
+    from: ["spiffe://${TRUST_DOMAIN}/svc/gateway"]
+    to: ["bookmark"]
+    operations: ["GET *", "HEAD *", "POST *", "PUT *"]
+    effect: allow

@@ -1,0 +1,26 @@
+# How bookmark describes itself to the gateway's module catalogue (spec 035).
+# Each v* release publishes catalogue-entry.json and bundle.zip built from
+# this file and deploy/bundle/ (.github/workflows/release.yaml, job
+# catalogue).
+schema: 1
+module: bookmark
+display_name: Bookmarks
+category: Collaboration
+summary: Tenant web bookmarks with titles, descriptions and tags, shared with users, roles or the whole organisation; backup and restore.
+image: ghcr.io/go-tangra/rust-tangra-bookmark
+routes:
+  prefixes: [/api/bookmark, /m/bookmark, /bookmark]
+  names: [bookmark]
+min_core: { gateway: 4.9.0, auth: 4.10.0 }
+bundle:
+  dir: deploy/bundle
+  templates: [config.yaml, policy.yaml]
+  tls_hosts: [bookmark-db]
+host_inputs:
+  - key: MODULE_ADVERTISE_HOST
+    label: Host name the core uses to reach this module
+    pattern: '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$'
+  - key: MODULE_BIND_IP
+    label: IP address the module's mesh ports listen on (reachable from the core)
+    pattern: '^((25[0-5]|2[0-4][0-9]|1?[0-9]?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1?[0-9]?[0-9])$'
+docs: https://github.com/go-tangra/rust-tangra-bookmark/tree/main/docs/help

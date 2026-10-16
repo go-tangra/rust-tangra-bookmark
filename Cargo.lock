@@ -2388,6 +2388,7 @@ dependencies = [
  "chrono",
  "http",
  "include_dir",
+ "regex",
  "serde",
  "serde_json",
  "serde_norway",

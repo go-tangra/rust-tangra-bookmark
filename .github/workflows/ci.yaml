@@ -1,0 +1,189 @@
+# CI of the bookmark module (Rust SDK), from the SDK's .github/workflows/ci.yaml
+# and templates/module/.github/workflows/release.yaml: fmt, clippy, tests
+# (throwaway PostgreSQL from testutil-pg, a Valkey service), the UI remote
+# (lint, test, build), the help pages (go-tangra docs-lint) and the image
+# (built, not pushed). release.yaml calls this workflow before it pushes an
+# image or publishes a catalogue entry.
+#
+# SDK dependency (stopgap, specs/038-bookmark-v4/tasks.md T090): Cargo.toml
+# depends on the SDK by path (../go-tangra-sdk-rust), because the `db` feature
+# is not on the SDK's main yet. Every job that builds Rust clones the public
+# SDK next to this checkout at the commit in .github/sdk-ref. When the
+# dependency becomes `git = ..., rev = ...`, delete those steps, the file and
+# the image's `build-contexts`.
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: '0'
+
+jobs:
+  ui:
+    name: UI lint + test + build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    defaults:
+      run:
+        working-directory: ui
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@go-tangra'
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: npm ci
+        run: npm ci --no-audit --no-fund
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bookmark-ui-dist
+          path: ui/dist
+          retention-days: 1
+
+  rust:
+    name: Rust fmt + clippy + test
+    runs-on: ubuntu-latest
+    needs:
+      - ui
+    # tests/module.rs publishes bookmark.shared to this Valkey.
+    services:
+      valkey:
+        image: valkey/valkey:8.1
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 2s
+          --health-timeout 2s
+          --health-retries 30
+    env:
+      TANGRA_TEST_VALKEY_ADDR: 127.0.0.1:6379
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: SDK checkout (path dependency, tasks.md T090)
+        run: |
+          set -eu
+          git clone --quiet --filter=blob:none https://github.com/go-tangra/go-tangra-sdk-rust ../go-tangra-sdk-rust
+          git -C ../go-tangra-sdk-rust checkout --quiet --detach "$(cat .github/sdk-ref)"
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      # testutil::pg downloads the zonky PostgreSQL binaries (Maven Central)
+      # into ~/.cache/tangra-sdk/pg-<version> and starts a throwaway server
+      # per test (the runner user is not root, as initdb requires).
+      - name: PostgreSQL binaries cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/tangra-sdk
+          key: testutil-pg-${{ runner.os }}-16.9.0
+
+      # The built remote, so the binary embeds and serves it under `ui`.
+      - uses: actions/download-artifact@v4
+        with:
+          name: bookmark-ui-dist
+          path: ui/dist
+
+      - name: cargo fmt
+        run: cargo fmt --all --check
+
+      - name: cargo clippy (default features)
+        run: cargo clippy --all-targets --locked -- -D warnings
+
+      - name: cargo clippy (all features)
+        run: cargo clippy --all-targets --all-features --locked -- -D warnings
+
+      - name: cargo test (all features)
+        run: cargo test --all-features --locked
+
+  docs:
+    name: Help pages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      # docs/help: front-matter, slugs, links, images, limits.
+      - name: Lint help pages
+        uses: go-tangra/go-tangra/.github/actions/docs-lint@v4.10.0
+        with:
+          dir: docs/help
+          tool-version: v4.10.0
+
+  # The image is built here only for pull requests and manual runs; on
+  # pushes release.yaml builds and pushes it.
+  image:
+    name: Image (build only)
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    needs:
+      - rust
+      - docs
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: SDK checkout (path dependency, tasks.md T090)
+        run: |
+          set -eu
+          git clone --quiet --filter=blob:none https://github.com/go-tangra/go-tangra-sdk-rust ../go-tangra-sdk-rust
+          git -C ../go-tangra-sdk-rust checkout --quiet --detach "$(cat .github/sdk-ref)"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          build-contexts: |
+            sdk=../go-tangra-sdk-rust
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          secrets: |
+            npm_token=${{ secrets.GITHUB_TOKEN }}
+          build-args: |
+            APP_VERSION=sha-${{ github.sha }}
+            VCS_REF=${{ github.sha }}

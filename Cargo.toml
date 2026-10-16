@@ -41,6 +41,7 @@ sha2 = "0.10"
 tangra-sdk = { path = "../go-tangra-sdk-rust/crates/tangra-sdk", features = ["db", "events", "testutil-pg"] }
 tower = { version = "0.5", features = ["util"] }
 tempfile = "3"
+regex = "1"
 
 [lints.rust]
 unsafe_code = "forbid"

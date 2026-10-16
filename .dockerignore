@@ -1,0 +1,8 @@
+/target
+.git
+.github
+**/node_modules
+ui/dist
+ui/.__mf__temp
+.playwright-mcp
+.env

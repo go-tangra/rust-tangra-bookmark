@@ -38,8 +38,8 @@ API (decision 3).
 Catalogue grant: prefix `/api/bookmark`, `/m/bookmark`, `/bookmark`; name
 `bookmark`; SPIFFE ID `spiffe://<td>/svc/bookmark`.
 
-## Ports (bundle, later phase)
+## Ports (deploy/bundle)
 
-gRPC 9975 (unused but bound by the runtime only when configured), HTTP
-9976, admin 127.0.0.1:9790. Final numbers are fixed with the bundle
-(tasks.md Phase 9).
+gRPC 9975 (no gRPC API; bound by the runtime), HTTP 9976, both published on
+`MODULE_BIND_IP`; admin 127.0.0.1:9790 (the `--healthcheck` probe). The
+bundle's PostgreSQL (`bookmark-db`) is not published.

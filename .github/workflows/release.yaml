@@ -1,0 +1,145 @@
+# Release of the bookmark module, from the SDK's
+# templates/module/.github/workflows/release.yaml (same rules as
+# go-tangra-deployer's ci.yaml): the checks (ci.yaml) first, then the image,
+# then on a release tag the catalogue entry.
+#
+# Images: ghcr.io/go-tangra/rust-tangra-bookmark tagged <version>,
+# <major>.<minor>, <major> (from tags vX.Y.Z) and sha-<short> (main pushes and
+# tags). There is deliberately NO `latest` and NO branch tag (the v3 image's
+# `latest` is left as it is and never moves again).
+#
+# The tag filter 'v*' also matches the v3 tags (v1.x, v2.x): those point at
+# v3 commits (branch v3), whose tree has no release.yaml, so they never run
+# this workflow.
+#
+# SDK dependency (stopgap, specs/038-bookmark-v4/tasks.md T090): see ci.yaml.
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ghcr.io/go-tangra/rust-tangra-bookmark
+
+jobs:
+  checks:
+    name: Checks
+    uses: ./.github/workflows/ci.yaml
+    permissions:
+      contents: read
+      packages: read
+    secrets: inherit
+
+  docker:
+    name: Docker image
+    runs-on: ubuntu-latest
+    needs:
+      - checks
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: SDK checkout (path dependency, tasks.md T090)
+        run: |
+          set -eu
+          git clone --quiet --filter=blob:none https://github.com/go-tangra/go-tangra-sdk-rust ../go-tangra-sdk-rust
+          git -C ../go-tangra-sdk-rust checkout --quiet --detach "$(cat .github/sdk-ref)"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: App version
+        id: version
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          flavor: |
+            latest=false
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          build-contexts: |
+            sdk=../go-tangra-sdk-rust
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          secrets: |
+            npm_token=${{ secrets.GITHUB_TOKEN }}
+          build-args: |
+            APP_VERSION=${{ steps.version.outputs.value }}
+            VCS_REF=${{ github.sha }}
+
+  # Module catalogue entry (spec 035): on a release tag, publish
+  # catalogue-entry.json and bundle.zip (tangra-module.yaml, deploy/bundle/)
+  # with a GitHub artifact attestation, so gateways can list and install this
+  # release. Runs after the image is pushed: the action checks it is
+  # pullable anonymously (the GHCR package must be public).
+  catalogue:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [docker]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: SDK checkout (path dependency, tasks.md T090)
+        run: |
+          set -eu
+          git clone --quiet --filter=blob:none https://github.com/go-tangra/go-tangra-sdk-rust ../go-tangra-sdk-rust
+          git -C ../go-tangra-sdk-rust checkout --quiet --detach "$(cat .github/sdk-ref)"
+
+      # tangra-catalogue is a Go tool (go run inside the action).
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      # The permissions command is the module's own Rust binary.
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: go-tangra/go-tangra/.github/actions/catalogue-entry@v4.10.0
+        with:
+          tool-version: v4.10.0
+          permissions-command: cargo run -q --locked --bin bookmark-catalogue-permissions
