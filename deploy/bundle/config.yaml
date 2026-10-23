@@ -1,0 +1,42 @@
+# bookmark configuration, rendered by the gateway's add-module wizard: every
+# ${...} below was filled from the core's own configuration or generated for
+# this bundle, so the issuer, trust domain and addresses match the core.
+service_name: bookmark
+trust_domain: ${TRUST_DOMAIN}
+env: production
+identity:
+  provider: provided
+enroll:
+  enabled: true
+  enroll_url: ${LCM_ENROLL_URL}
+  lcm_grpc: ${LCM_GRPC}
+  tenant_id: ${MESH_TENANT_ID}
+  token_file: /tokens/enrollment.token
+  state_file: /state/svid.json
+authz: { source: file, path: /app/policy.yaml }
+server: { grpc_addr: 0.0.0.0:9975, http_addr: 0.0.0.0:9976 }
+admin: { addr: 127.0.0.1:9790 }
+discovery:
+  static:
+    gateway: ["${GATEWAY_GRPC}"]
+    auth: ["${AUTH_GRPC}"]
+    lcm: ["${LCM_GRPC}"]
+# Backup imports up to 16 MiB: the request limit leaves room for the body.
+limits: { max_request_bytes: 16842752 }
+limits_bookmark: { backup_max_bytes: 16777216 }
+# The bundle's own PostgreSQL (TLS, certificate from the bundle's local CA):
+# bookmark_app (NOBYPASSRLS, init-db.sh) serves, the owner migrates.
+db:
+  dsn: postgres://bookmark_app:${GEN_PASSWORD_2}@bookmark-db:5432/bookmark?sslmode=verify-full&sslrootcert=/tls/ca.pem
+  migrate_dsn: postgres://postgres:${GEN_PASSWORD_1}@bookmark-db:5432/bookmark?sslmode=verify-full&sslrootcert=/tls/ca.pem
+  max_conns: 16
+# bookmark.shared toasts need the core's event bus. The module runs without
+# it; to turn it on, give the bookmark Valkey user (TLS) here, mount its CA in
+# compose.yaml and set events.enabled:
+#   valkey:
+#     addresses: ["valkey.example.org:6380"]
+#     username: bookmark
+#     password: "..."
+#     ca_file: /tls/valkey-ca.pem
+events: { enabled: false }
+gateway: { service: gateway, issuer: ${GATEWAY_ISSUER} }

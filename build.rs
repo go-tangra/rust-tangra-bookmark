@@ -1,82 +1,32 @@
+//! Build-time inputs:
+//!
+//! - `BOOKMARK_UI_DIST`: the directory `include_dir!` embeds with feature
+//!   `ui`: `ui/dist` when it was built (`npm run build`), else an empty
+//!   directory in `OUT_DIR` (the binary then serves no remote).
+//! - `BOOKMARK_VERSION`: the release stamped into the binary (the image build
+//!   passes `APP_VERSION`); `CARGO_PKG_VERSION` otherwise.
+//!
+//! `include_dir!` and `sqlx::migrate!` do not track the files they embed in
+//! every case, so the embedded trees are declared here.
+
 use std::path::PathBuf;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let proto_dir = PathBuf::from("proto");
-
-    // Include path for well-known types shipped alongside protoc
-    let protoc_include = protoc_include_dir();
-
-    let include_dirs: Vec<PathBuf> = if let Some(ref inc) = protoc_include {
-        vec![proto_dir.clone(), inc.clone()]
+fn main() {
+    println!("cargo:rerun-if-changed=docs/help");
+    println!("cargo:rerun-if-changed=api/openapi");
+    println!("cargo:rerun-if-changed=migrations");
+    println!("cargo:rerun-if-changed=ui/dist");
+    println!("cargo:rerun-if-env-changed=BOOKMARK_VERSION");
+    let manifest_dir = PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").unwrap_or_default());
+    let dist = manifest_dir.join("ui").join("dist");
+    let embed = if dist.join("mf-manifest.json").is_file() {
+        dist
     } else {
-        vec![proto_dir.clone()]
+        let empty = PathBuf::from(std::env::var_os("OUT_DIR").unwrap_or_default()).join("no-ui-dist");
+        if let Err(e) = std::fs::create_dir_all(&empty) {
+            println!("cargo:warning=cannot create {}: {e}", empty.display());
+        }
+        empty
     };
-
-    let bookmark_protos = &[
-        "proto/bookmark/service/v1/bookmark.proto",
-        "proto/bookmark/service/v1/permission.proto",
-        "proto/bookmark/service/v1/backup.proto",
-        "proto/bookmark/service/v1/user.proto",
-    ];
-
-    let registration_proto = "proto/common/service/v1/module_registration.proto";
-    let admin_stub_proto = "proto/admin/service/v1/admin_stub.proto";
-
-    // Compile bookmark service protos (server only)
-    tonic_build::configure()
-        .build_server(true)
-        .build_client(false)
-        .file_descriptor_set_path(
-            PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("bookmark_descriptor.bin"),
-        )
-        .compile_protos(bookmark_protos, &include_dirs)?;
-
-    // Compile module registration proto (client only — we call admin-service, not serve it)
-    tonic_build::configure()
-        .build_server(false)
-        .build_client(true)
-        .compile_protos(&[registration_proto], &include_dirs)?;
-
-    // Compile admin stub proto (client only — we call admin-service UserService/RoleService)
-    tonic_build::configure()
-        .build_server(false)
-        .build_client(true)
-        .compile_protos(&[admin_stub_proto], &include_dirs)?;
-
-    Ok(())
-}
-
-/// Attempt to find the protoc well-known types include directory.
-fn protoc_include_dir() -> Option<PathBuf> {
-    // Check PROTOC_INCLUDE env var first
-    if let Ok(dir) = std::env::var("PROTOC_INCLUDE") {
-        let p = PathBuf::from(dir);
-        if p.exists() {
-            return Some(p);
-        }
-    }
-
-    // Try sibling include/ dir relative to protoc binary
-    if let Ok(protoc) = std::env::var("PROTOC") {
-        let p = PathBuf::from(protoc);
-        if let Some(parent) = p.parent().and_then(|p| p.parent()) {
-            let inc = parent.join("include");
-            if inc.exists() {
-                return Some(inc);
-            }
-        }
-    }
-
-    // Common system paths
-    for path in &[
-        "/usr/include",
-        "/usr/local/include",
-    ] {
-        let p = PathBuf::from(path).join("google/protobuf");
-        if p.exists() {
-            return Some(PathBuf::from(path));
-        }
-    }
-
-    None
+    println!("cargo:rustc-env=BOOKMARK_UI_DIST={}", embed.display());
 }

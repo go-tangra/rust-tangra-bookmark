@@ -1,45 +1,47 @@
 [package]
-name = "rust-tangra-bookmark"
-version = "1.0.0"
-edition = "2021"
-description = "Bookmark management service with gRPC, mTLS, and Zanzibar-like permissions"
+name = "tangra-bookmark"
+description = "go-tangra v4 bookmark module: tenant-scoped web bookmarks with sharing (Rust SDK)"
+version = "4.0.0"
+edition = "2024"
+rust-version = "1.85"
+license = "MIT"
+repository = "https://github.com/go-tangra/rust-tangra-bookmark"
+publish = false
+default-run = "bookmarksvc"
 
 [[bin]]
-name = "bookmark-server"
+name = "bookmarksvc"
 path = "src/main.rs"
 
+[features]
+default = []
+# Embed and serve the built module-federation remote (ui/dist) at /ui/*
+# (the Go build tag `ui`). Without a built dist/ the binary serves no remote.
+ui = ["tangra-sdk/ui"]
+
 [dependencies]
-# gRPC
-tonic = { version = "0.12", features = ["tls"] }
-prost = "0.13"
-prost-types = "0.13"
-
-# Async runtime
+# Development: the SDK checkout next to this repository. Before release this
+# becomes a git rev dependency (specs/038-bookmark-v4/tasks.md T090).
+tangra-sdk = { path = "../go-tangra-sdk-rust/crates/tangra-sdk", features = ["db", "events"] }
+sqlx = { version = "0.8", default-features = false, features = ["postgres", "runtime-tokio", "macros", "migrate", "uuid", "chrono"] }
+axum = "0.8"
 tokio = { version = "1", features = ["full"] }
-
-# Database
-sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono", "migrate"] }
-
-# Serialization & config
+http = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-serde_yaml = "0.9"
-
-# IDs & time
-uuid = { version = "1", features = ["v4", "serde"] }
-chrono = { version = "0.4", features = ["serde"] }
-
-# Logging
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
-
-# HTTP server for serving frontend assets
-axum = "0.8"
-tower-http = { version = "0.6", features = ["fs", "cors"] }
-
-# Utilities
+uuid = { version = "1", features = ["v7", "v8", "serde"] }
+chrono = { version = "0.4", default-features = false, features = ["clock", "std", "serde"] }
+url = "2"
+include_dir = "0.7"
 thiserror = "2"
-anyhow = "1"
+serde_norway = "0.9"
+sha2 = "0.10"
 
-[build-dependencies]
-tonic-build = "0.12"
+[dev-dependencies]
+tangra-sdk = { path = "../go-tangra-sdk-rust/crates/tangra-sdk", features = ["db", "events", "testutil-pg"] }
+tower = { version = "0.5", features = ["util"] }
+tempfile = "3"
+regex = "1"
+
+[lints.rust]
+unsafe_code = "forbid"

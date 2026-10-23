@@ -1,200 +1,112 @@
-#![allow(dead_code, clippy::result_large_err)]
+//! `bookmarksvc`: the bookmark module (deployer `cmd/deployersvc`).
+//!
+//! ```text
+//! bookmarksvc -config <path>                 migrate, then serve until SIGINT/SIGTERM
+//! bookmarksvc bootstrap -config <path>       apply the migrations (db.migrate_dsn) and exit
+//! bookmarksvc --healthcheck -config <path>   exit 0 when /readyz answers 200
+//! bookmarksvc version                        print the release
+//! ```
 
-mod authz;
-mod cert;
-mod client;
-mod config;
-mod data;
-mod frontend;
-mod middleware;
-mod registration;
-mod service;
+use std::process::ExitCode;
 
-use std::net::SocketAddr;
-use std::path::Path;
+use tangra_bookmark::{VERSION, config, healthcheck, module};
+use tangra_sdk::gateway;
 
-use tokio::signal;
-use tokio::sync::watch;
-use tonic::transport::Server;
+const DEFAULT_CONFIG: &str = "/app/config.yaml";
 
-use crate::authz::checker::Checker;
-use crate::authz::engine::Engine;
-use crate::config::{DataConfig, LoggerConfig, ServerConfig};
-use crate::data::bookmark_repo::BookmarkRepo;
-use crate::data::permission_repo::PermissionRepo;
-use crate::client::admin_client::AdminClient;
-use crate::service::bookmark_service::proto::backup_service_server::BackupServiceServer;
-use crate::service::bookmark_service::proto::bookmark_permission_service_server::BookmarkPermissionServiceServer;
-use crate::service::bookmark_service::proto::bookmark_service_server::BookmarkServiceServer;
-use crate::service::bookmark_service::proto::bookmark_user_service_server::BookmarkUserServiceServer;
+/// Go `flag` style: `-config path`, `--config path`, `-config=path`.
+fn config_path(args: &[String]) -> Result<String, String> {
+    let mut it = args.iter();
+    let mut path = DEFAULT_CONFIG.to_owned();
+    while let Some(a) = it.next() {
+        let flag = a.trim_start_matches('-');
+        if !a.starts_with('-') {
+            return Err(format!("unexpected argument {a:?}"));
+        }
+        match flag.split_once('=') {
+            Some(("config", v)) => path = v.to_owned(),
+            None if flag == "config" => {
+                path = it.next().ok_or("flag needs an argument: -config")?.clone();
+            }
+            None if flag == "healthcheck" => {}
+            _ => return Err(format!("flag provided but not defined: {a}")),
+        }
+    }
+    Ok(path)
+}
+
+fn load(args: &[String]) -> Result<config::BookmarkFile, String> {
+    let cfg = config::load(&config_path(args)?).map_err(|e| e.0)?;
+    for w in cfg.module.warnings() {
+        eprintln!("bookmarksvc: warning: {w}");
+    }
+    Ok(cfg)
+}
+
+async fn serve(args: &[String]) -> Result<(), String> {
+    let cfg = load(args)?;
+    let b = module::build(cfg, module::Options::default())
+        .await
+        .map_err(|e| e.0)?;
+    b.run().await.map_err(|e| e.0)
+}
+
+/// Applies the embedded migrations with `db.migrate_dsn` (else `db.dsn`) and
+/// exits (deployer `bootstrap`).
+async fn bootstrap(args: &[String]) -> Result<(), String> {
+    let cfg = load(args)?;
+    module::migrate(&cfg).await.map_err(|e| e.0)
+}
+
+async fn health(args: &[String]) -> Result<(), String> {
+    let cfg =
+        tangra_sdk::config::Config::<config::BookmarkConfig>::load(config_path(args)?).map_err(|e| e.0)?;
+    healthcheck::probe(&cfg.framework.admin.addr).await
+}
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    // 1. Load config
-    let config_dir = std::env::var("CONFIG_DIR").unwrap_or_else(|_| "configs".to_string());
-
-    let logger_cfg: LoggerConfig =
-        config::load_config(Path::new(&config_dir).join("logger.yaml").as_ref())?;
-    let server_cfg: ServerConfig =
-        config::load_config(Path::new(&config_dir).join("server.yaml").as_ref())?;
-    let data_cfg: DataConfig =
-        config::load_config(Path::new(&config_dir).join("data.yaml").as_ref())?;
-
-    // 2. Init tracing/logging
-    init_tracing(&logger_cfg.logger);
-    tracing::info!("starting bookmark service v1.0.0");
-
-    // 3. Load mTLS certs (optional)
-    let tls_config = cert::load_tls_config();
-
-    // 4. Create DB pool, run migrations
-    let pool = data::db::create_pool(&data_cfg).await?;
-    data::db::run_migrations(&pool).await?;
-
-    // 5. Create repos, authz engine, services
-    let bookmark_repo = BookmarkRepo::new(pool.clone());
-    let permission_repo = PermissionRepo::new(pool.clone());
-    let engine = Engine::new(permission_repo);
-    let checker = Checker::new(engine);
-
-    let bookmark_svc = service::bookmark_service::BookmarkServiceImpl::new(
-        bookmark_repo,
-        checker.clone(),
-    );
-    let permission_svc =
-        service::permission_service::PermissionServiceImpl::new(checker.clone());
-    let backup_svc = service::backup_service::BackupServiceImpl::new(pool.clone());
-
-    // 5b. Create admin client for user/role listing
-    let admin_endpoint =
-        std::env::var("ADMIN_GRPC_ENDPOINT").unwrap_or_else(|_| "localhost:7787".to_string());
-    let admin_client = match AdminClient::connect(&admin_endpoint).await {
-        Ok(c) => {
-            tracing::info!(endpoint = %admin_endpoint, "admin gRPC client connected");
-            Some(c)
+async fn main() -> ExitCode {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    // Report the release to the gateway at registration (Go:
+    // gatewayclient.SetBuildVersion(version)).
+    gateway::set_build_version(VERSION);
+    let first = args.first().map(String::as_str);
+    let res = match first {
+        Some("version" | "-version" | "--version") => {
+            println!("{VERSION}");
+            Ok(())
         }
+        Some("bootstrap") => bootstrap(&args[1..]).await,
+        _ if args.iter().any(|a| a == "--healthcheck" || a == "-healthcheck") => health(&args).await,
+        _ => serve(&args).await,
+    };
+    match res {
+        Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
-            tracing::warn!(error = %e, endpoint = %admin_endpoint, "failed to connect admin client, user/role listing will be unavailable");
-            None
-        }
-    };
-    let user_svc = admin_client
-        .map(|c| service::user_service::UserServiceImpl::new(c));
-
-    // 6. Start frontend HTTP server (serves Module Federation assets)
-    let frontend_dist = std::env::var("FRONTEND_DIST_PATH")
-        .unwrap_or_else(|_| "/app/frontend-dist".to_string());
-    if std::path::Path::new(&frontend_dist).exists() {
-        let frontend_addr: SocketAddr = server_cfg
-            .server
-            .http
-            .as_ref()
-            .map(|h| h.addr.as_str())
-            .unwrap_or("0.0.0.0:9701")
-            .parse()?;
-        let dist_path = frontend_dist.clone();
-        tokio::spawn(async move {
-            if let Err(e) = frontend::start_frontend_server(frontend_addr, &dist_path).await {
-                tracing::error!(error = %e, "Frontend server failed");
-            }
-        });
-        tracing::info!(path = %frontend_dist, "Frontend serving static files");
-    } else {
-        tracing::info!(path = %frontend_dist, "No frontend dist directory found, skipping frontend server");
-    }
-
-    // 7. Build tonic server
-    let addr: SocketAddr = server_cfg.server.grpc.addr.parse()?;
-
-    let mut server = Server::builder();
-
-    // 8. Apply mTLS if available
-    if let Some(tls) = tls_config {
-        server = server.tls_config(tls)?;
-        tracing::info!("gRPC server configured with mTLS");
-    } else {
-        tracing::warn!("running without mTLS");
-    }
-
-    let mut router = server
-        .add_service(BookmarkServiceServer::with_interceptor(
-            bookmark_svc,
-            middleware::audit::audit_interceptor,
-        ))
-        .add_service(BookmarkPermissionServiceServer::with_interceptor(
-            permission_svc,
-            middleware::audit::audit_interceptor,
-        ))
-        .add_service(BackupServiceServer::new(backup_svc));
-
-    if let Some(user_svc) = user_svc {
-        router = router.add_service(BookmarkUserServiceServer::with_interceptor(
-            user_svc,
-            middleware::audit::audit_interceptor,
-        ));
-    }
-
-    // 9. Start registration background task
-    let (shutdown_tx, shutdown_rx) = watch::channel(false);
-    let reg_handle = registration::start_registration(shutdown_rx);
-
-    // 10. Serve
-    tracing::info!(addr = %addr, "gRPC server listening");
-
-    let graceful = router.serve_with_shutdown(addr, async {
-        shutdown_signal().await;
-        tracing::info!("shutdown signal received");
-    });
-
-    graceful.await?;
-
-    // 11. Graceful shutdown: unregister, drain connections
-    let _ = shutdown_tx.send(true);
-    let _ = reg_handle.await;
-
-    tracing::info!("bookmark service stopped");
-    Ok(())
-}
-
-fn init_tracing(logger: &config::LoggerSection) {
-    let filter = tracing_subscriber::EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(&logger.level));
-
-    match logger.format.as_str() {
-        "json" => {
-            tracing_subscriber::fmt()
-                .with_env_filter(filter)
-                .json()
-                .init();
-        }
-        _ => {
-            tracing_subscriber::fmt()
-                .with_env_filter(filter)
-                .init();
+            eprintln!("bookmarksvc: {e}");
+            ExitCode::FAILURE
         }
     }
 }
 
-async fn shutdown_signal() {
-    let ctrl_c = async {
-        signal::ctrl_c()
-            .await
-            .expect("failed to install Ctrl+C handler");
-    };
+#[cfg(test)]
+mod tests {
+    use super::config_path;
 
-    #[cfg(unix)]
-    let terminate = async {
-        signal::unix::signal(signal::unix::SignalKind::terminate())
-            .expect("failed to install SIGTERM handler")
-            .recv()
-            .await;
-    };
+    fn args(a: &[&str]) -> Vec<String> {
+        a.iter().map(|s| (*s).to_owned()).collect()
+    }
 
-    #[cfg(not(unix))]
-    let terminate = std::future::pending::<()>();
-
-    tokio::select! {
-        _ = ctrl_c => {},
-        _ = terminate => {},
+    #[test]
+    fn flags() {
+        assert_eq!(config_path(&args(&[])).unwrap(), "/app/config.yaml");
+        assert_eq!(config_path(&args(&["-config", "a.yaml"])).unwrap(), "a.yaml");
+        assert_eq!(config_path(&args(&["--config=b.yaml"])).unwrap(), "b.yaml");
+        assert_eq!(
+            config_path(&args(&["--healthcheck", "-config", "c"])).unwrap(),
+            "c"
+        );
+        assert!(config_path(&args(&["-config"])).is_err());
+        assert!(config_path(&args(&["-nope"])).is_err());
     }
 }
